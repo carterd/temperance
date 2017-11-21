@@ -6,11 +6,11 @@ const express = require('express');
 //process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 
 var options = {
-    key: fs.readFileSync('server-key.pem'),
-    cert: fs.readFileSync('inter-server-cert.pem'),
-    ca: [ fs.readFileSync('client-ca-cert.pem'),
-          fs.readFileSync('intermediate-cert.pem'),
-          fs.readFileSync('server-ca-cert.pem'), ],
+    key: fs.readFileSync('../certs/server-key.pem'),
+    cert: fs.readFileSync('../certs/inter-server-cert.pem'),
+    ca: [ fs.readFileSync('../certs/client-ca-cert.pem'),
+          fs.readFileSync('../certs/intermediate-cert.pem'),
+          fs.readFileSync('../certs/server-ca-cert.pem'), ],
     requestCert: true,
     rejectUnauthorized: false
 };
