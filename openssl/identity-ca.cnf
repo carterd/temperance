@@ -1,0 +1,35 @@
+[ ca ]
+default_ca      = CA_default
+
+[ CA_default ]
+serial = ca-serial
+crl = ca-crl.pem
+database = ca-database.txt
+name_opt = CA_default
+cert_opt = CA_default
+default_crl_days = 9999
+default_md = md5
+
+[ req ]
+default_bits           = 4096
+days                   = 9999
+distinguished_name     = req_distinguished_name
+attributes             = req_attributes
+prompt                 = yes
+output_password        = password
+
+[ req_distinguished_name ]
+commonName                  = Your full name, or used pseudonmy
+commonName_default          = Jane Doe
+countryName                 = Your country of origin (2 letter code)
+countryName_default         = UK
+countryName_min             = 2
+stateOrProvinceName         = State or Province
+stateOrProvinceName_default = Derbyshire
+localityName                = City or Town
+localityName_default        = Ilkeston
+organizationName            = Organization Name
+organizationalUnit          = ca-server
+
+[ req_attributes ]
+#challengePassword      = Challenge Password
