@@ -1,33 +1,92 @@
 const fs = require('fs');
+const util = require('util');
 const http = require('http');
 const https = require('https');
 const express = require('express');
+const bodyParser = require('body-parser');
+const nconf = require('nconf');
+const x509Identity = require('./lib/x509-identity');
+const temperanceIdentity = require('./lib/temperance-identity');
+const orgTemperanceTest = require('./service-modules/org.temperance.test');
+const orgTemperanceDetails = require('./service-modules/org.temperance.details');
 
-//process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+// Set up the default logging
+const defaultLogger = require('./lib/default-logger.js');
+defaultLogger.enable = true;
 
-var options = {
-    key: fs.readFileSync('../certs/server-key.pem'),
-    cert: fs.readFileSync('../certs/inter-server-cert.pem'),
-    ca: [ fs.readFileSync('../certs/client-ca-cert.pem'),
-          fs.readFileSync('../certs/intermediate-cert.pem'),
-          fs.readFileSync('../certs/server-ca-cert.pem'), ],
-    requestCert: true,
-    rejectUnauthorized: false
+/**
+ * Configuration processing
+ */
+nconfOpts = {
+    parseValues: true,
+    lowerCase: true,
+    file: '../config/temperance.json',
 };
+nconf.argv();
+nconf.env(nconfOpts);
+nconf.file(nconfOpts);
 
-const app = express();
+/**
+ * Create the certificate accounts
+ */
+temperanceIdentity.identitiesCertsDir = '../' + nconf.get('acquaintances-identities-cert-dir');
+temperanceIdentity.agentsCertsDir = '../' + nconf.get('acquaintances-agents-cert-dir');
+temperanceIdentity.identitiesDir = '../' + nconf.get('acquaintances-identities-dir');
+temperanceIdentity.agentsDir = '../' + nconf.get('acquaintances-agents-dir');
 
+function setAccessIdentities(identities) {
+    // Process all the given identities
+    for (var identity of identities) {
+	x509Identity.addIdentity(identity.distName, identity);
+	// Process all the agents for the identity
+	for (var agent of identity.agents) {
+	    agent.addAccess("org.temperance.details", "read");
+	    agent.addAccess("org.temperance.details", "write");
+	    x509Identity.addAgent(agent);
+	}
+	x509Identity.getAgentFromIdentity = temperanceIdentity.getAgentFromIdentity;
+    }    
+}
 
-https.createServer(options, app).listen(5555, function() { console.log('listening 5555') });
+function startServer(identities) {
+    var options = {
+	key: fs.readFileSync('../' + nconf.get('service-private-key-file')),
+	cert: fs.readFileSync('../' + nconf.get('service-cert-file')),
+	ca: temperanceIdentity.identitiesToPemArray(identities),
+	requestCert: true,
+	rejectUnauthorized: false
+    };
 
-app.get('/', function (req, res) {
-  console.log(req.connection.remoteAddress);
-  console.log(req.socket.getPeerCertificate());
-  console.log(req.socket.getPeerCertificate().subject);
-  res.header('Content-type', 'text/html');
-  res.send('<h1>Hello World!</h1>');
-});
+    const app = express();
 
-// app.listen(8088, function () {
-//  console.log('Example app listening on port 8088!')
-// });
+    app.use(x509Identity);
+    app.use(bodyParser.json());
+    app.use('/org.temperance.test', orgTemperanceTest);
+    app.use('/org.temperance.details', orgTemperanceDetails);
+/*    app.use('/', function (req, res) {
+	
+	console.log("----- req");
+	console.log(req.body);
+	console.log("----- req end");
+	
+	// res.header('Content-type', 'text/html');
+	// var body = '<h1>Hello World!</h1>';
+	res.header('Content-type', 'application/json');
+	var body = JSON.stringify(req.body);
+	res.send(body);
+    });
+*/
+    var httpsServer = https.createServer(options, app);
+    httpsServer.listen(5555, function() { console.log('listening 5555') });
+}
+
+async function main() {
+    try {
+	var identities = await temperanceIdentity.readIdentityPath('../acquaintances/identities/');
+    } catch (err) {
+	console.log(err);
+    }
+    setAccessIdentities(identities);
+    startServer(identities);
+}
+main();

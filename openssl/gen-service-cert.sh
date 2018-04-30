@@ -4,6 +4,7 @@
 #
 SERVICE_SIZE=2048
 CERT_DAYS=3650
+INDENT="    "
 
 # Directories
 #
@@ -26,22 +27,6 @@ SERVICE_PRIVATE_KEY_PATH=${SERVICE_DIR}/${SERVICE_PRIVATE_KEY_FILE}
 SERVICE_CSR_PATH=${SERVICE_DIR}/${SERVICE_CSR_FILE}
 SERVICE_CERT_PATH=${SERVICE_DIR}/${SERVICE_CERT_FILE}
 
-# Read input string
-#
-input_string=
-function input_string {
-    input_string=
-    until [ ! -z "$input_string" ]; do
-        echo -e "$1"
-        read input_string
-        input_string=`echo $input_string | sed -e "s/^[ \t]*//" -e "s/[ \t]*$//" -e "s/[ \t]+/ /g" | grep "$2"`
-        if [ -z "$input_string" ]; then
-            echo -e "Invalid string doesn't match '$2'"
-        fi
-    done
-    echo -e ""
-}
-
 # Title some text
 #
 function title {
@@ -49,11 +34,29 @@ function title {
     echo -e "--------------------------------------------------------------------------------\n"
 }
 
+# Print some text
+#
+function print {
+    echo -e "$INDENT$1"
+}
+
 # Error and exit
 #
 function error {
     echo -e "ERROR : $1"
     exit 1
+}
+
+# Remove file
+#
+function remove_file {
+    if [ -f "$1" ]; then
+	print "replacing existing $2 '$1'"
+	rm "$1"
+	if  [ -f "$1" ]; then
+            error "Failed to remove existing $2 '$1'"
+        fi
+    fi
 }
 
 title "Service Identity Creation"
@@ -65,30 +68,36 @@ if [ ! -f "${IDENTITY_CERT_PATH}" ] ; then
     error "Identity certificate '${IDENTITY_CERT_PATH}' not found"
 fi
 
-identity=`openssl x509 -in ${IDENTITY_CERT_PATH} -text -noout -certopt no_header,no_signame,no_serial,no_validity,no_pubkey,no_sigdump,no_aux,no_version | grep "^[ \t]*Subject"`
-identity=`echo $identity | sed -e "s/^[ \t]*Subject:[ \t]*//"`
-name=`echo $identity | sed -e "s/.*CN=//" | sed -e "s/,.*//"`
-country=`echo $identity | sed -e "s/.*C=//" | sed -e "s/,.*//"`
-state=`echo $identity | sed -e "s/.*ST=//" | sed -e "s/,.*//"`
-city=`echo $identity | sed -e "s/.*L=//" | sed -e "s/,.*//"`
-organisation=`echo $identity | sed -e "s/.*O=//" | sed -e "s/,.*//"`
+identity=`openssl x509 -in ${IDENTITY_CERT_PATH} -subject -noout`
+identity=`echo $identity | sed -e "s/^[ \t]*subject=[ \t]*//"`
+surname=`echo $identity | sed -e "s/.*SN=//" | sed -e "s/\/.*//"`
+givenname=`echo $identity | sed -e "s/.*GN=//" | sed -e "s/\/.*//"`
+initials=`echo $identity | sed -e "s/.*initials=//" | sed -e "s/\/.*//"`
+name=`echo $identity | sed -e "s/.*CN=//" | sed -e "s/\/.*//"`
+country=`echo $identity | sed -e "s/.*C=//" | sed -e "s/\/.*//"`
+state=`echo $identity | sed -e "s/.*ST=//" | sed -e "s/\/.*//"`
+city=`echo $identity | sed -e "s/.*L=//" | sed -e "s/\/.*//"`
+organisation=`echo $identity | sed -e "s/.*O=//" | sed -e "s/\/.*//"`
 organisation_unit="server"
 
-echo -e "    using identity cert '${IDENTITY_CERT_PATH}'"
-echo -e "    found identity 'Full name=${name}, Country=${country}, State=${state}, City=${city}'"
-echo -e ""
+print "using identity cert '${IDENTITY_CERT_PATH}'"
+print "found identity 'Full name=${name}, Country=${country}, State=${state}, City=${city}'"
+print ""
 
 title "Generating '${SERVICE_PRIVATE_KEY_PATH}' file private-key required for service"
-
+remove_file ${SERVICE_PRIVATE_KEY_PATH} "private-key file"
+print ""
 openssl genrsa -out ${SERVICE_PRIVATE_KEY_PATH} ${SERVICE_SIZE} > /dev/null 2>&1
 
 title "Generating '${SERVICE_CSR_PATH}' required to create service certificate"
-
-openssl req -new -key ${SERVICE_PRIVATE_KEY_PATH} -out ${SERVICE_CSR_PATH} -subj "/CN=$name/C=$country/ST=$state/L=$city/O=$organisation/OU=$organisation_unit"
+remove_file ${SERVICE_CSR_PATH} "CSR file"
+print ""
+openssl req -new -key ${SERVICE_PRIVATE_KEY_PATH} -out ${SERVICE_CSR_PATH} -subj "/SN=$surname/GN=$givenname/initials=$initials/CN=$name/C=$country/ST=$state/L=$city/O=$organisation/OU=$organisation_unit"
 
 title "Generating '${SERVICE_CERT_PATH}' certificate file"
-
-openssl x509 -req -days ${CERT_DAYS} -in ${SERVICE_CSR_PATH} -signkey ${SERVICE_PRIVATE_KEY_PATH} -out ${SERVICE_CERT_PATH}
+remove_file ${SERVICE_CERT_PATH} "certificate file"
+print ""
+openssl x509 -req -days ${CERT_DAYS} -in ${SERVICE_CSR_PATH} -CA ${IDENTITY_CERT_PATH} -CAkey ${IDENTITY_PRIVATE_KEY_PATH} -CAcreateserial -out ${SERVICE_CERT_PATH}
 
 title "Finished"
 

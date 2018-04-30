@@ -1,0 +1,10 @@
+{
+    "identity-cert-file":                "identity/identity-cert.pem",
+    "service-cert-file":                 "service/service-cert.pem",
+    "service-private-key-file":          "service/service-private-key.pem",
+    "acquaintances-identities-dir":      "acquaintances/identities/",
+    "acquaintances-identities-cert-dir": "acquaintances/identities/certs/",
+    "acquaintances-agents-dir":          "acquaintances/agents",
+    "acquaintances-agents-cert-dir":     "acquaintances/agents/certs/",
+    "service-modules-dir":               "node/service-modules"
+}

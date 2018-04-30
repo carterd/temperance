@@ -15,8 +15,6 @@ IDENTITY_PRIVATE_KEY_FILE=identity-private-key.pem
 IDENTITY_CSR_FILE=identity-csr.pem
 IDENTITY_CERT_FILE=identity-cert.pem
 
-rm ../identity/*
-
 # Identity details
 #
 IDENTITY_PRIVATE_KEY_PATH=${IDENTITY_DIR}/${IDENTITY_PRIVATE_KEY_FILE}
@@ -27,13 +25,17 @@ IDENTITY_CERT_PATH=${IDENTITY_DIR}/${IDENTITY_CERT_FILE}
 #
 input_string=
 function input_string {
+    user_input=
     input_string=
-    until [ ! -z "$input_string" ]; do
+    until [ ! -z "$user_input" ]; do
         echo -e "$1"
-        read input_string
-        input_string=`echo $input_string | sed -e "s/^[ \t]*//" -e "s/[ \t]*$//" -e "s/[ \t]+/ /g" | grep "$2"`
-        if [ -z "$input_string" ]; then
+        read user_input
+        user_input=`echo "$user_input" | sed -e "s/^[ \t]*//" -e "s/[ \t]*$//" -e "s/[ \t]+/ /g" | grep "$2"`
+        if [ $? -ne 0 ]; then
             echo -e "Invalid string doesn't match '$2'"
+	else
+	    input_string=$user_input
+	    user_input="found"
         fi
     done
     echo -e ""
@@ -44,6 +46,12 @@ function input_string {
 function title {
     echo -e "$1"
     echo -e "--------------------------------------------------------------------------------\n"
+}
+
+# Print some text
+#
+function print {
+    echo -e "$1"
 }
 
 # Error and exit
@@ -68,7 +76,9 @@ fi
 
 title "Enter Identity Details"
 
-input_string "Your full name, or used pseudonym:" "^[-.a-zA-Z ]\{6,\}$";            name=$input_string
+input_string "First or given name, or used psedonym:" "^[-.a-zA-Z ]\{1,\}$";        givenname=$input_string
+input_string "Surname, or used family name psedonym:" "^[-.a-zA-Z ]\{1,\}$";        surname=$input_string
+input_string "Initials:" "^[-.a-zA-Z ]*$";                                          initials=$input_string
 input_string "Your country of origin (2 letter code):" "^[A-Z]\{2\}$";              country=$input_string
 input_string "State or Province" "^[-.a-zA-Z ]\+$";                                 state=$input_string
 input_string "City or Town" "^[-.a-zA-Z ]\+$";                                      city=$input_string
@@ -78,10 +88,11 @@ organisation_unit="identity"
 title "Generating '${IDENTITY_PRIVATE_KEY_PATH}' file private-key required to sign certificates"
 
 openssl genrsa -out ${IDENTITY_PRIVATE_KEY_PATH} ${IDENTITY_SIZE} > /dev/null 2>&1
-
+name=`openssl rsa -noout -modulus -in ${IDENTITY_PRIVATE_KEY_PATH} | sed -e "s/^.*=//" | tr -d '\n' | openssl dgst -sha1 | sed -e "s/^.*=[ \t]//"`
+name="sha1:$name"
 title "Generating '${IDENTITY_CSR_PATH}' required to create identity certificate"
 
-openssl req -new -key ${IDENTITY_PRIVATE_KEY_PATH} -out ${IDENTITY_CSR_PATH} -subj "/CN=$name/C=$country/ST=$state/L=$city/O=$organisation/OU=$organisation_unit"
+openssl req -new -key ${IDENTITY_PRIVATE_KEY_PATH} -out ${IDENTITY_CSR_PATH} -subj "/SN=$surname/GN=$givenname/initials=$initials/CN=$name/C=$country/ST=$state/L=$city/O=$organisation/OU=$organisation_unit"
 
 title "Generating '${IDENTITY_CERT_PATH}' certificate file"
 

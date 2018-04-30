@@ -1,0 +1,7 @@
+{
+    "identity-certs-dir": "identity/certs/",
+    "agent-certs-dir": "agent/certs/",
+    "acquaintance-dir": "acquaintances/",
+    "acquaintance-identity-dir": "identity/",
+    "acquaintance-identity-cert-dir": "certs/"
+}

@@ -1,0 +1,4 @@
+{
+    "certFilename": "test.pem",
+    "agents": [ "test.service.json" ]
+}
