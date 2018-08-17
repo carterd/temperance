@@ -1,0 +1,4 @@
+{
+    "certificateChainIds": ["agent-cert.pem"],
+    "access": []
+}

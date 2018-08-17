@@ -61,12 +61,18 @@ function error {
     exit 1
 }
 
+# START EXECUATION HERE
+#
 title "Identity Certificate Creation"
 
+# Checks for directory
+#
 if [ -n "$(ls -A ${IDENTITY_DIR})" ]; then
   error "Identity directory '${IDENTITY_DIR}' is not empty"
 fi
 
+# Encryption options
+#
 input_string "Encrypt identity with passphrase (Y/N):" "^[YyNn]$";                  pass=$input_string
 if [ "$pass" = "Y" ] || [ "$pass" = "y" ]; then
     input_string "Passphrase to encrypt identity private key:" "^[-.a-zA-Z0-9 ]\+$"; pass=$input_string
@@ -74,6 +80,8 @@ else
     pass=""
 fi
 
+# Identity details
+#
 title "Enter Identity Details"
 
 input_string "First or given name, or used psedonym:" "^[-.a-zA-Z ]\{1,\}$";        givenname=$input_string
@@ -85,50 +93,28 @@ input_string "City or Town" "^[-.a-zA-Z ]\+$";                                  
 organisation="temperance"
 organisation_unit="identity"
 
+# Generation private key file
+#
 title "Generating '${IDENTITY_PRIVATE_KEY_PATH}' file private-key required to sign certificates"
-
-openssl genrsa -out ${IDENTITY_PRIVATE_KEY_PATH} ${IDENTITY_SIZE} > /dev/null 2>&1
-name=`openssl rsa -noout -modulus -in ${IDENTITY_PRIVATE_KEY_PATH} | sed -e "s/^.*=//" | tr -d '\n' | openssl dgst -sha1 | sed -e "s/^.*=[ \t]//"`
+if [ "$pass" = "" ]; then
+    openssl genrsa -out ${IDENTITY_PRIVATE_KEY_PATH} ${IDENTITY_SIZE} > /dev/null 2>&1
+else
+    openssl genrsa ${IDENTITY_SIZE} 2> /dev/null | openssl pkcs8 -topk8 -outform PEM -passout "pass:$pass" -out ${IDENTITY_PRIVATE_KEY_PATH} > /dev/null 2>&1
+fi
+name=`openssl rsa -noout -modulus -passin "pass:$pass" -in ${IDENTITY_PRIVATE_KEY_PATH} | sed -e "s/^.*=//" | tr -d '\n' | openssl dgst -sha1 | sed -e "s/^.*=[ \t]//"`
 name="sha1:$name"
+
+# Generation certificate request file
+#
 title "Generating '${IDENTITY_CSR_PATH}' required to create identity certificate"
+openssl req -new -key ${IDENTITY_PRIVATE_KEY_PATH} -passin "pass:$pass" -out ${IDENTITY_CSR_PATH} -subj "/SN=$surname/GN=$givenname/initials=$initials/CN=$name/C=$country/ST=$state/L=$city/O=$organisation/OU=$organisation_unit" > /dev/null 2>&1
 
-openssl req -new -key ${IDENTITY_PRIVATE_KEY_PATH} -out ${IDENTITY_CSR_PATH} -subj "/SN=$surname/GN=$givenname/initials=$initials/CN=$name/C=$country/ST=$state/L=$city/O=$organisation/OU=$organisation_unit"
-
+# Generation certificat file
+#
 title "Generating '${IDENTITY_CERT_PATH}' certificate file"
+openssl x509 -req -days ${CERT_DAYS} -in ${IDENTITY_CSR_PATH} -passin "pass:$pass" -signkey ${IDENTITY_PRIVATE_KEY_PATH} -out ${IDENTITY_CERT_PATH} > /dev/null 2>&1
 
-openssl x509 -req -days ${CERT_DAYS} -in ${IDENTITY_CSR_PATH} -signkey ${IDENTITY_PRIVATE_KEY_PATH} -out ${IDENTITY_CERT_PATH}
-
+# Finished 
+#
 title "Finished"
-
 exit 0
-
-
-
-
-#openssl req -new   -config identity-ca.cnf -key ${IDENTITY_PRIVATE_KEY_PATH} -out ${IDENTITY_CSR_PATH} -subj "/C=UK/ST=Midlands/L=YourLocation/O=YourApp/OU=YourApp demo" > /dev/null 2>&1
-#openssl x509 -req -days 9999 -in csr.pem -signkey private-key.pem -out cert.pem
-
-# CA
-##openssl req -new -x509 -days 9999 -config server-ca.cnf -keyout server-ca-key.pem -out server-ca-cert.pem
-##openssl req -new -x509 -days 9999 -config client-ca.cnf -keyout client-ca-key.pem -out client-ca-cert.pem
-
-# used private keys
-##openssl genrsa -out server-key.pem 4096
-##openssl genrsa -out client-key.pem 4096
-
-# requests for the certificates
-##openssl req -new -config server.cnf -sha256 -key server-key.pem -out server-csr.pem
-##openssl req -new -config client.cnf -sha256 -key client-key.pem -out client-csr.pem
-
-# sign the request
-##openssl x509 -req -extfile server.cnf -days 999 -passin "pass:password" -in server-csr.pem -CA server-ca-cert.pem -CAkey server-ca-key.pem -CAcreateserial -out server-cert.pem
-##openssl x509 -req -extfile client.cnf -days 999 -passin "pass:password" -in client-csr.pem -CA client-ca-cert.pem -CAkey client-ca-key.pem -CAcreateserial -out client-cert.pem
-
-# Intermediate
-##openssl genrsa -out intermediate-key.pem 2048
-##openssl req -config intermediate-ca.cnf -new -sha256 -key intermediate-key.pem -out intermediate-csr.pem
-##openssl ca -config intermediate-ca.cnf -outdir . -passin "pass:password" -keyfile server-ca-key.pem -cert server-ca-cert.pem -extensions v3_intermediate_ca -days 5000 -notext -md sha256 -in intermediate-csr.pem -out intermediate-cert.pem
-##openssl req -new -config server.cnf -sha256 -key server-key.pem -out inter-server-csr.pem
-##openssl x509 -req -extfile server.cnf -days 999 -passin "pass:password" -in inter-server-csr.pem -CA intermediate-cert.pem -CAkey intermediate-key.pem -CAcreateserial -out inter-server-cert.pem
-
-

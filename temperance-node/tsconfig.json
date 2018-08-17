@@ -1,0 +1,29 @@
+{
+    "compilerOptions": 
+    {
+        "baseUrl": ".",
+        "target": "es6",
+        "module": "commonjs",
+        "outDir": "dist",
+        "sourceMap": true,
+        "paths": {
+            "*" : [ "ts-src/lib/*" ]
+        }
+    },
+    "files":
+    [
+        "./node_modules/@types/mocha/index.d.ts",
+        "./node_modules/@types/node/index.d.ts"
+    ],
+    "exclude":
+    [
+        "lib",
+        "node_modules"
+    ],
+    "include":
+    [
+        "./ts-src/**/*.ts",
+        "./ts-test/**/*.ts",
+        "./service-modules/**/*.ts"
+    ]
+}
