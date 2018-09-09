@@ -9,5 +9,6 @@ try {
 }
 catch (error)
 {
+    console.log("ERROR ON APP ---------------------------------------------")
     console.log(error);
 }

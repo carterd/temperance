@@ -10,6 +10,8 @@ import FileSystemStore from './FileSystemStore';
 // Filesystem error Objects
 import AgentReadError from './Errors/AgentReadError';
 import ReadError from './Errors/ReadError';
+import IdLookup from './IdLookup';
+import DirectoryAccess from '../../FileSystem/DirectoryAccess';
 // TemperanceIdentity Objects
 import Agent from '../Agent';
 import CertificateChain from '../CertificateChain';
@@ -19,10 +21,7 @@ import AgentStoreInterface from '../Stores/AgentStore';
 import CertificateChainFactory from '../Factories/CertificateChainFactory';
 
 // Node Libraries
-import * as FS from 'fs';
 import * as Util from 'util';
-import * as Path from 'path';
-const readFileAsync = Util.promisify(FS.readFile);
 
 /**
  * A file system instance of AgentStore, agent ids for the store are infact filesystem
@@ -36,29 +35,33 @@ export default class AgentStore extends FileSystemStore<Agent> implements AgentS
     private _certificateChainFactory: CertificateChainFactory;
 
     /**
+     * Quick lookup populated on fetches
+     */
+    private _agentStringLookup: IdLookup;
+
+    /**
      * The constructory for the Filesystem AgentStore, requires a path where
      * the identities serviced by the factory are located
      * @param identityPath 
      */
-    constructor( agentDir: string, certificateChainFactory: CertificateChainFactory)
+    constructor( agentDirectoryAccess: DirectoryAccess, certificateChainFactory: CertificateChainFactory)
     {
-        super(agentDir, ".json");
+        super(agentDirectoryAccess, ".json");
         this._certificateChainFactory = certificateChainFactory;
+        this._agentStringLookup = new IdLookup();
     }
-
+   
     /**
      * The wrapper to ensure the initialise of certificates is correct.
      */
-    public initaliseAsync(): Promise<void> 
+    public async initialiseAsync(): Promise<void> 
     {
-        return new Promise<void>( async (resolve, reject) => 
-        {
-            // This is not to be a caching store
-            //await this.cacheEntireStore();
-            this.initalised = true;
-            return resolve();
-        });
-    }
+        if (!this._certificateChainFactory.certificateStore.initialised)
+            await this._certificateChainFactory.certificateStore.initialiseAsync();
+        // This is not to be a caching store
+        //await this.cacheEntireStore();
+        this.initialised = true;
+    } 
 
     /**
      * Allows the base class to construct specific store read errors of a consistent type
@@ -77,49 +80,47 @@ export default class AgentStore extends FileSystemStore<Agent> implements AgentS
      * @param identityDistingishedName subject of identity certificate.
      * @param logger optional logger for logging read
      */
-    protected readFileAsync(agentJsonPath: string) : Promise<Agent>
+    protected async readFileAsync(agentJsonFilename: string, id: string) : Promise<Agent>
     {
-        return new Promise( async (resolve, reject) =>
+        var jsonAgent = null;
+        try
         {
-            try
-            {
-                // Read the agent json
-                this.logger ? this.logger.debug(Util.format("AgentStore.readFileAsync : reading agent file '%s'", agentJsonPath)) : null;
-	            var agentJson = await readFileAsync(agentJsonPath);
-                var jsonAgent = JSON.parse(agentJson.toString('utf8'));
-                this.validateAgentJson(jsonAgent);
+            // Read the agent json
+            this.logger ? this.logger.debug(Util.format("AgentStore.readFileAsync : reading agent file '%s'", agentJsonFilename)) : null;
+            var agentJson = await this._directoryAccess.readFileAsync(agentJsonFilename);
+            jsonAgent = JSON.parse(agentJson.toString('utf8'));
+            this.validateAgentJson(jsonAgent);
+        
+            var certificateChainIds = jsonAgent.certificateChainIds;
+            var agentString = jsonAgent.agentString;
+            var access = jsonAgent.access;
 
-                var certificateChainIds = jsonAgent.certificateChainIds;
-                var agentId = jsonAgent.agentId;
-                var access = jsonAgent.access;
+            // Also check the chain is good.
+            var certificateChain: CertificateChain = await this._certificateChainFactory.getCertificateChainAsync(certificateChainIds);
+            Agent.validateAgentCertificateChain(certificateChain, agentString);
+            
+            // Create the agent object
+            var identityString = certificateChain.rootCertificate.issuer.identityString;
+            var newAgent = new Agent(id, agentString, identityString, certificateChain, access, null);
 
-                // Read in the identity certificate chain
-                try
-                {
-                    var certificateChain: CertificateChain = await this._certificateChainFactory.getCertificateChainAsync(certificateChainIds);
-                    Agent.validateAgentCertificateChain(certificateChain, agentId);
-                    // Also check the chain is good.
-                }
-                catch (error)
-                {
-                    return reject(new AgentReadError(agentJsonPath, error));
-                }
-                                // Create the agent object
-                var newAgent = new Agent(agentId, null, certificateChain, access);
-                return resolve(newAgent);
-	        } catch (error) {
-                this.logger? this.logger.error(Util.format("AgentStore.readFileAsync() : error in reading agent '%s'", agentJsonPath)) : null;
-		        return reject(new AgentReadError(agentJsonPath, error));
-	        }
-        });
+            // Ensure agent is in lookup
+            this._agentStringLookup.addMapping(agentString,id);
+
+            return newAgent;
+        }
+        catch (error) 
+        {
+            this.logger? this.logger.error(Util.format("AgentStore.readFileAsync() : error in reading agent '%s'", agentJsonFilename)) : null;
+            throw new AgentReadError(agentJsonFilename, error);
+        }
     }
 
     protected validateAgentJson(agentJson: any)
     {
         if (agentJson.certificateChainIds instanceof Array === false)
             throw new Error('error in agent file, certificateChainIds not specified correctly');
-        if (typeof agentJson.agentId !== 'string')
-            throw new Error('error in agent file, agentId not specified correctly');
+        if (typeof agentJson.agentString !== 'string')
+            throw new Error('error in agent file, agentString not specified correctly');
     }
 
     /**
@@ -128,5 +129,16 @@ export default class AgentStore extends FileSystemStore<Agent> implements AgentS
     public getAgentAsync(id: string): Promise<Agent> 
     {
         return this.getFromFileSystem(id);
+    }
+
+    /**
+     * Return the agent given the agent string.
+     */
+    public getAgentFromAgentStringAsync(identityString: string) : Promise<Agent>
+    {
+        var id = this._agentStringLookup.getId(identityString);
+        if (id === undefined)
+            id = null;
+        return this.getAgentAsync(id);
     }
 }

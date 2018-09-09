@@ -76,14 +76,20 @@ class Config {
     /**
      * Get the node service instance identity json file path
      */
-    get selfIdentityJsonPath() {
-        return this.getDir(Config.SELF_IDENT_JSON_PATH);
+    get selfIdentityJsonDir() {
+        return this.getDir(Config.SELF_IDENT_JSON_DIR);
     }
     /**
      * Get the node service instance certificate directory
      */
     get selfIdentityCertificateDir() {
         return this.getDir(Config.SELF_IDENT_CERT_DIR);
+    }
+    get selfIdentityId() {
+        return this.get(Config.SELF_IDENT_ID);
+    }
+    get selfAgentKeyId() {
+        return this.get(Config.SELF_AGENT_KEY_ID);
     }
     /**
      * Get the node service instance agent json directory
@@ -118,8 +124,8 @@ class Config {
     /**
      * Get the service's agent json
      */
-    get selfAgentJson() {
-        return this.get(Config.SELF_AGENT_JSON);
+    get selfAgentId() {
+        return this.get(Config.SELF_AGENT_ID);
     }
     /**
      * Get the directory where the agent keys are stored
@@ -132,12 +138,14 @@ Config.ACQ_IDENT_JSON_DIR = 'acquaintances-identities-json-dir';
 Config.ACQ_AGENT_JSON_DIR = 'acquaintances-agents-json-dir';
 Config.ACQ_IDENT_CERT_DIR = 'acquaintances-identities-cert-dir';
 Config.ACQ_AGENT_CERT_DIR = 'acquaintances-agents-cert-dir';
-Config.SELF_IDENT_JSON_PATH = 'self-identity-json-path';
+Config.SELF_IDENT_JSON_DIR = 'self-identity-json-dir';
 Config.SELF_IDENT_CERT_DIR = 'self-identity-cert-dir';
+Config.SELF_IDENT_ID = 'self-identity-id';
 Config.SELF_AGENT_JSON_DIR = 'self-agent-json-dir';
 Config.SELF_AGENT_CERT_DIR = 'self-agent-cert-dir';
-Config.SELF_AGENT_JSON = 'self-agent-json';
+Config.SELF_AGENT_ID = 'self-agent-id';
 Config.SELF_AGENT_KEYS_DIR = 'self-agent-keys-dir';
+Config.SELF_AGENT_KEY_ID = 'self-agent-key-id';
 Config.SUPPORTED_SERVICES = 'self-supported-services';
 Config.SERVICE_MODULES_DIR = 'service-modules-dir';
 Config.SERVICE_PORT = 'service-port';
@@ -146,14 +154,16 @@ Config.REQUIRED_CONFIG = [
     Config.ACQ_AGENT_JSON_DIR,
     Config.ACQ_IDENT_CERT_DIR,
     Config.ACQ_AGENT_CERT_DIR,
-    Config.SELF_IDENT_JSON_PATH,
+    Config.SELF_IDENT_JSON_DIR,
+    Config.SELF_IDENT_ID,
     Config.SELF_IDENT_CERT_DIR,
     Config.SELF_AGENT_JSON_DIR,
     Config.SELF_AGENT_CERT_DIR,
+    Config.SELF_AGENT_KEY_ID,
     Config.SUPPORTED_SERVICES,
     Config.SERVICE_MODULES_DIR,
     Config.SERVICE_PORT,
-    Config.SELF_AGENT_JSON,
+    Config.SELF_AGENT_ID,
     Config.SELF_AGENT_KEYS_DIR
 ];
 exports.default = Config;

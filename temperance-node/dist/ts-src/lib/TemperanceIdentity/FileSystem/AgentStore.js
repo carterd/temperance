@@ -13,49 +13,51 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-const Agent_1 = require("../Agent");
+/// <reference types="node"/>
 const FileSystemStore_1 = require("./FileSystemStore");
-const AgentReadError_1 = require("./AgentReadError");
+// Filesystem error Objects
+const AgentReadError_1 = require("./Errors/AgentReadError");
+const IdLookup_1 = require("./IdLookup");
+// TemperanceIdentity Objects
+const Agent_1 = require("../Agent");
+// Node Libraries
 const FS = require("fs");
 const Util = require("util");
 const readFileAsync = Util.promisify(FS.readFile);
-const readDirAsync = Util.promisify(FS.readdir);
-const statAsync = Util.promisify(FS.stat);
+/**
+ * A file system instance of AgentStore, agent ids for the store are infact filesystem
+ * filenames in the specified agentDir of the constructor.
+ */
 class AgentStore extends FileSystemStore_1.default {
     /**
      * The constructory for the Filesystem AgentStore, requires a path where
      * the identities serviced by the factory are located
      * @param identityPath
      */
-    constructor(agentDir, certificateStore) {
+    constructor(agentDir, certificateChainFactory) {
         super(agentDir, ".json");
-        this._certificateStore = certificateStore;
+        this._certificateChainFactory = certificateChainFactory;
+        this._agentStringLookup = new IdLookup_1.default();
     }
     /**
      * The wrapper to ensure the initialise of certificates is correct.
      */
-    initalise() {
-        return new Promise((reslove, reject) => __awaiter(this, void 0, void 0, function* () {
-            this._agentIdMap = new Map();
-            yield super.initalise();
-            this.initalised = true;
-        }));
+    initialiseAsync() {
+        return __awaiter(this, void 0, void 0, function* () {
+            if (!this._certificateChainFactory.certificateStore.initialised)
+                yield this._certificateChainFactory.certificateStore.initialiseAsync();
+            // This is not to be a caching store
+            //await this.cacheEntireStore();
+            this.initialised = true;
+        });
     }
     /**
-     * The implementation of reading in the certificate files into the factory
-     * @param certificatePath The file path of the certificate to attempt to read in
-     * @param filename The filename only of the certificate file
+     * Allows the base class to construct specific store read errors of a consistent type
+     * @param filePath
+     * @param message
      */
-    processFileAsync(agentPath, filename) {
-        return new Promise((resolve, reject) => __awaiter(this, void 0, void 0, function* () {
-            try {
-                var agent = yield this.readAgentFileAsync(agentPath);
-                this._agentIdMap.set(filename, agent);
-            }
-            catch (err) {
-                this.readErrors.set(filename, new AgentReadError_1.default(agentPath, err));
-            }
-        }));
+    constructDefaultReadError(filePath, message) {
+        return new AgentReadError_1.default(filePath, new Error(message));
     }
     /**
      * Helper function to process a given agentJson file and generates agent.
@@ -64,44 +66,54 @@ class AgentStore extends FileSystemStore_1.default {
      * @param identityDistingishedName subject of identity certificate.
      * @param logger optional logger for logging read
      */
-    readAgentFileAsync(agentJsonPath) {
-        return new Promise((resolve, reject) => __awaiter(this, void 0, void 0, function* () {
+    readFileAsync(agentJsonPath, id) {
+        return __awaiter(this, void 0, void 0, function* () {
+            var jsonAgent = null;
             try {
                 // Read the agent json
-                this.logger ? this.logger.debug(Util.format("AgentStore.readAgentFileAsync : reading agent file '%s'", agentJsonPath)) : null;
+                this.logger ? this.logger.debug(Util.format("AgentStore.readFileAsync : reading agent file '%s'", agentJsonPath)) : null;
                 var agentJson = yield readFileAsync(agentJsonPath);
-                var jsonAgent = JSON.parse(agentJson.toString('utf8'));
-                Agent_1.default.validateAgentJson(jsonAgent);
-                var certificateId = jsonAgent.certificateFilename;
+                jsonAgent = JSON.parse(agentJson.toString('utf8'));
+                this.validateAgentJson(jsonAgent);
+                var certificateChainIds = jsonAgent.certificateChainIds;
                 var agentString = jsonAgent.agentString;
                 var access = jsonAgent.access;
-                var privateKey = jsonAgent.privateKey;
-                var identity = null;
-                // Read in the identity certificate
-                this.logger ? this.logger.debug(Util.format("AgentStore.readAgentFileAsync() : associating agent certificate id '%s'", certificateId)) : null;
-                var agentCertificate = yield this._certificateStore.certificateFromIdString(certificateId);
+                // Also check the chain is good.
+                var certificateChain = yield this._certificateChainFactory.getCertificateChainAsync(certificateChainIds);
+                Agent_1.default.validateAgentCertificateChain(certificateChain, agentString);
                 // Create the agent object
-                var newAgent = new Agent_1.default(agentString, certificateId, agentCertificate.raw, identity, access);
-                newAgent.privateKey = privateKey;
-                return resolve(newAgent);
+                var identityString = certificateChain.rootCertificate.issuer.identityString;
+                var newAgent = new Agent_1.default(id, agentString, identityString, certificateChain, access, null);
+                // Ensure agent is in lookup
+                this._agentStringLookup.addMapping(agentString, id);
+                return newAgent;
             }
-            catch (err) {
-                // On error test if we have exception handle or throw
-                return reject(err);
+            catch (error) {
+                this.logger ? this.logger.error(Util.format("AgentStore.readFileAsync() : error in reading agent '%s'", agentJsonPath)) : null;
+                throw new AgentReadError_1.default(agentJsonPath, error);
             }
-        }));
+        });
+    }
+    validateAgentJson(agentJson) {
+        if (agentJson.certificateChainIds instanceof Array === false)
+            throw new Error('error in agent file, certificateChainIds not specified correctly');
+        if (typeof agentJson.agentString !== 'string')
+            throw new Error('error in agent file, agentString not specified correctly');
     }
     /**
      * Return the certificate given the identity string.
      */
-    agentFromIdString(id) {
-        return new Promise((resolve, reject) => {
-            if (!this.initalised)
-                throw new Error("AgentStore.agentFromIdString store has not been initialised");
-            if (!this._agentIdMap.has(id))
-                throw new Error(Util.format("AgentStore.agentFromIdString key '%s' is not defined in store", id));
-            resolve(this._agentIdMap.get(id));
-        });
+    getAgentAsync(id) {
+        return this.getFromFileSystem(id);
+    }
+    /**
+     * Return the agent given the agent string.
+     */
+    getAgentFromAgentStringAsync(identityString) {
+        var id = this._agentStringLookup.getId(identityString);
+        if (id === undefined)
+            id = null;
+        return this.getAgentAsync(id);
     }
 }
 exports.default = AgentStore;

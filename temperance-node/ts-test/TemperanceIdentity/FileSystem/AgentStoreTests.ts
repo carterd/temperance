@@ -17,11 +17,12 @@ import AgentReadError from '../../../ts-src/lib/TemperanceIdentity/FileSystem/Er
 import AgentStore from '../../../ts-src/lib/TemperanceIdentity/FileSystem/AgentStore';
 import CertificateChainError from '../../../ts-src/lib/TemperanceIdentity/Errors/CertificateListError';
 import CertificateChain from '../../../ts-src/lib/TemperanceIdentity/CertificateChain';
+import DirectoryAccess from '../../../ts-src/lib/FileSystem/DirectoryAccess';
 
-var certDir = "./ts-test/TemperanceIdentity/data/agents/certificates/";
-var agentDir = "./ts-test/TemperanceIdentity/data/agents/";
+var certDirAccess = new DirectoryAccess("./ts-test/TemperanceIdentity/data/agents/certificates/");
+var agentDirAccess = new DirectoryAccess("./ts-test/TemperanceIdentity/data/agents/");
 
-var validCertificateStore = new CertificateStore(certDir);
+var validCertificateStore = new CertificateStore(certDirAccess);
 var validCertificateChainFactory = new CertificateChainFactory(validCertificateStore);
 
 var mocBadCertificateChainFactory = new CertificateChainFactory(validCertificateStore);
@@ -30,11 +31,11 @@ sinon.stub(mocBadCertificateChainFactory, "getCertificateChainAsync").throws(new
 describe('Class AgentStore', function() {
     describe('initialiseAsync', function() { 
         it('success', function(done) {
-            var agentStore = new AgentStore(agentDir, validCertificateChainFactory);
+            var agentStore = new AgentStore(agentDirAccess, validCertificateChainFactory);
             agentStore.logger = TestConfig.logger;
-            agentStore.initaliseAsync()
+            agentStore.initialiseAsync()
             .then( () => {
-                agentStore.initalised.should.equal(true);
+                agentStore.initialised.should.equal(true);
                 done();
             })
             .catch( (error) => {done(error)} );
@@ -42,25 +43,25 @@ describe('Class AgentStore', function() {
     });
     describe('getAgent', function() {
         it('successfully get a agent', function(done) {
-            var agentStore = new AgentStore(agentDir, validCertificateChainFactory);
+            var agentStore = new AgentStore(agentDirAccess, validCertificateChainFactory);
             agentStore.logger = TestConfig.logger;
-            agentStore.initaliseAsync()
-            .then( () => { return validCertificateStore.initaliseAsync() })
+            agentStore.initialiseAsync()
+            .then( () => { return validCertificateStore.initialiseAsync() })
             .then( () => { return agentStore.getAgentAsync('agent.json') })
             .then( (agent) => {
                 agent.should.not.equal(null);
                 agent.should.be.instanceOf(Agent);
-                agent.agentId.should.equal("sha1:b469c21faab2d71c19cd3daa3df743e6c6777553/Derek/Carter/DC/Solihull/West-Midlands/UK/temperance/server");
+                agent.agentString.should.equal('CN@sha1:b469c21faab2d71c19cd3daa3df743e6c6777553\\SN@Carter\\GN@Derek\\I@DC\\C@UK\\ST@West-Midlands\\L@Solihull\\O@temperance\\OU@server');
                 agent.certificateChain.length.should.equal(1);
                 done();
             })
             .catch( (error) => {done(error)} );
         });
         it('return null on no matching agents found', function(done) {
-            var agentStore = new AgentStore(agentDir, validCertificateChainFactory);
+            var agentStore = new AgentStore(agentDirAccess, validCertificateChainFactory);
             agentStore.logger = TestConfig.logger;
-            agentStore.initaliseAsync()
-            .then( () => { return validCertificateStore.initaliseAsync() })
+            agentStore.initialiseAsync()
+            .then( () => { return validCertificateStore.initialiseAsync() })
             .then( () => { return agentStore.getAgentAsync('agent.json') })
             .then( () => { return agentStore.getAgentAsync('nosuch-agent.json'); })
             .then( (value) => {
@@ -70,10 +71,10 @@ describe('Class AgentStore', function() {
             .catch( (error) => {done(error)} );
         });
         it('throws error if agent file not valid format', function(done) {
-            var agentStore = new AgentStore(agentDir, validCertificateChainFactory);
+            var agentStore = new AgentStore(agentDirAccess, validCertificateChainFactory);
             agentStore.logger = TestConfig.logger;
-            agentStore.initaliseAsync()
-            .then( () => { return validCertificateStore.initaliseAsync() })
+            agentStore.initialiseAsync()
+            .then( () => { return validCertificateStore.initialiseAsync() })
             .then( () => { return agentStore.getAgentAsync('bad-agent.json'); })
             .then( (value) => {
                     done("we are not expecting valid agent for a bad agent");
@@ -85,46 +86,73 @@ describe('Class AgentStore', function() {
             .catch( (error) => {done(error)} );
         });
         it('throws error if agent file has invalid certificates in chain', function(done) {
-            var agentStore = new AgentStore(agentDir, mocBadCertificateChainFactory);
+            var agentStore = new AgentStore(agentDirAccess, mocBadCertificateChainFactory);
             agentStore.logger = TestConfig.logger;
-            agentStore.initaliseAsync()
+            agentStore.initialiseAsync()
             .then( () => { return agentStore.getAgentAsync('bad-cert-agent.json') })
             .then( (value) => {
                     done("we are not expecting valid agent for a bad agent");
-                },
-                (error) => {
-                    error.should.be.an.instanceof(AgentReadError);
-                    error.fileError.should.be.an.instanceof(CertificateChainError);
-                    done();
                 })
-            .catch( (error) => {done(error)} );
+            .catch( (error) => {
+                error.should.be.an.instanceof(AgentReadError);
+                error.fileError.should.be.an.instanceof(CertificateChainError);
+                done();
+            } );
         });
         it('throws error if agent id mismatches certificate', function(done) {
-            var agentStore = new AgentStore(agentDir, validCertificateChainFactory);
+            var agentStore = new AgentStore(agentDirAccess, validCertificateChainFactory);
             agentStore.logger = TestConfig.logger;
-            agentStore.initaliseAsync()
-            .then( () => { return validCertificateStore.initaliseAsync() })
+            agentStore.initialiseAsync()
+            .then( () => { return validCertificateStore.initialiseAsync() })
             .then( () => { return agentStore.getAgentAsync('cert-mismatch-agent.json') })
             .then( (agent) => {
                     done("not expecting a valid agent for mismatched cert");
-                },
-                (error) => {
-                    console.log(error);
-                    done();
                 })
-            .catch( (error) => {done(error)} );
+            .catch( (error) => { done()} );
         });
         it('throws error if store not initialised', function(done) {
-            var agentStore = new AgentStore(agentDir, validCertificateChainFactory);
+            var agentStore = new AgentStore(agentDirAccess, validCertificateChainFactory);
             agentStore.logger = TestConfig.logger;
             agentStore.getAgentAsync('agent.json')
             .then( (vallue) => {
                    done("should have reported error as not initialsed");
-                },
-                (error) => {
-                    agentStore.initalised.should.equal(false);
-                    done()
+                })
+            .catch( (error) => {
+                agentStore.initialised.should.equal(false);
+                done()
             });
+        });
+    });
+    describe('getAgentFromAgentIdentityAsync', function() {
+        it('successfully get a agent', function(done) {
+            var agentStore = new AgentStore(agentDirAccess, validCertificateChainFactory);
+            agentStore.logger = TestConfig.logger;
+            agentStore.initialiseAsync()
+            .then( () => { return validCertificateStore.initialiseAsync() })
+            .then( () => { return agentStore.getAgentAsync('agent.json') })
+            .then( (agent) => { 
+                return agentStore.getAgentFromAgentStringAsync("CN@sha1:b469c21faab2d71c19cd3daa3df743e6c6777553\\SN@Carter\\GN@Derek\\I@DC\\C@UK\\ST@West-Midlands\\L@Solihull\\O@temperance\\OU@server") })
+            .then( (agent) => {
+                agent.should.not.equal(null);
+                agent.should.be.instanceOf(Agent);
+                agent.agentString.should.equal('CN@sha1:b469c21faab2d71c19cd3daa3df743e6c6777553\\SN@Carter\\GN@Derek\\I@DC\\C@UK\\ST@West-Midlands\\L@Solihull\\O@temperance\\OU@server');
+                agent.certificateChain.length.should.equal(1);
+                done();
+            })
+            .catch( (error) => {done(error)} );
+        });
+        it('return null on no matching agents found', function(done) {
+            var agentStore = new AgentStore(agentDirAccess, validCertificateChainFactory);
+            agentStore.logger = TestConfig.logger;
+            agentStore.initialiseAsync()
+            .then( () => { return validCertificateStore.initialiseAsync() })
+            .then( () => { return agentStore.getAgentAsync('agent.json') })
+            .then( () => { return agentStore.getAgentFromAgentStringAsync('NOT-THERE'); })
+            .then( (value) => {
+                    expect(value).to.equal(null);                            
+                    done();
+                })
+            .catch( (error) => {done(error)} );
         });
     });
 });

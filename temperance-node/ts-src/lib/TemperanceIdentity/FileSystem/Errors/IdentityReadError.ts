@@ -23,9 +23,8 @@ export default class IdentityReadError extends ReadError
      * @param error 
      * @param agentReadErrors 
      */
-    constructor(identityPath: string, error: Error, agentErrors: Array<Error>)
+    constructor(identityPath: string, error: Error)
     {
         super(identityPath, error);
-        this.agentErrors = agentErrors;
     }
 }

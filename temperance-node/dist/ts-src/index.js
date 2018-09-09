@@ -6,6 +6,7 @@ try {
     var app = new App_1.default();
 }
 catch (error) {
+    console.log("ERROR ON APP ---------------------------------------------");
     console.log(error);
 }
 //# sourceMappingURL=index.js.map

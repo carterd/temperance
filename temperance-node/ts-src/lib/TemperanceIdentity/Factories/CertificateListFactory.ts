@@ -31,7 +31,7 @@ export default class CertificateListFactory
     /**
      * This is the certififcate store used to instanciate certificate chains
      */
-    private _certificateStore: CertificateStore;
+    'certificateStore': CertificateStore;
 
     /**
      * Constructor for the certificate list factory
@@ -39,42 +39,44 @@ export default class CertificateListFactory
      */
     constructor(certificateStore: CertificateStore)
     {
-        this._certificateStore = certificateStore;
+        this.certificateStore = certificateStore;
     }
 
     /**
      * convert the given certificate ids into a certificate list
      * @param certificateIds 
      */
-    public getCertificateListAsync(certificateIds: Array<string>) : Promise<CertificateList>
+    public async getCertificateListAsync(certificateIds: Array<string>) : Promise<CertificateList>
     {
-        return new Promise(async (resolve, reject) => 
+        var certificateList = new CertificateList();
+        var certificateErrors = new Array<Error>();
+        for (var id of certificateIds)
         {
-            var certificateList = new CertificateList();
-            var certificateErrors = new Array<Error>();
-            for (var id of certificateIds)
+            try
             {
-                try
+                this.logger ? this.logger.debug(Util.format("CertificateListFactory.getCertificateListAsync() : associating agent certificates id '%s'", id)) : null;
+                var certificate = await this.certificateStore.getCertificateAsync(id);
+                if (certificate == null)
                 {
-                    this.logger ? this.logger.debug(Util.format("CertificateListFactory.getCertificateListAsync() : associating agent certificates id '%s'", id)) : null;
-                    var certificate = await this._certificateStore.getCertificateAsync(id);
-                    if (certificate == null)
-                    {
-                        certificateErrors.push(new Error(Util.format("failed to find certificate in certificate store with id '%s'", id)));
-                    }
-                    else
-                    {
-                        certificateList.push(id, certificate);
-                    }
+                    this.logger ? this.logger.error(Util.format("CertificateListFactory.getCertificateListAsync() : failed to find certificate in certificate store with id '%s'", id)) : null;
+                    certificateErrors.push(new Error(Util.format("failed to find certificate in certificate store with id '%s'", id)));
                 }
-                catch (error)
+                else
                 {
-                    certificateErrors.push(error);
+                    certificateList.push(id, certificate);
                 }
             }
-            if (certificateErrors.length != 0)
-                return reject(new CertificateListError("errors during resolution of certificates", certificateErrors));
-            return resolve(certificateList);
-        });
+            catch (error)
+            {
+                this.logger ? this.logger.error(Util.format("CertificateListFactory.getCertificateListAsync() : error getting from certificate store '%s'", error)) : null;
+                certificateErrors.push(error);
+            }
+        }
+        if (certificateErrors.length != 0)
+        {
+            this.logger ? this.logger.error("CertificateListFactory.getCertificateListAsync() : errors during resolution of certificates") : null;
+            throw new CertificateListError("errors during resolution of certificates", certificateErrors);
+        }
+        return certificateList;
     }
 }

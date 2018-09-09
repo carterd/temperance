@@ -6,9 +6,12 @@
 
 /// <reference types="node"/>
 
+import DistingishedName from './DistingishedName';
+
 import * as FS from 'fs';
 import * as Util from 'util';
 import * as PemTools from 'pemtools';
+import * as NodeForge from 'node-forge';
 import * as X509 from 'x509';
 import * as TLS from 'tls';
 
@@ -38,27 +41,44 @@ interface HashObject
  */
 export default class Certificate
 {
+    // An optional id associated with certificate object
+    'id'
+    // The der string in 'binary'
+    'der': string = null;
     // The instance of the raw PEM file
-    'raw': Buffer = null;
-    // The instance of the PEM tools object
-    'pem': any = null;
-    // The instance of the X509 certificate
-    'x509': any = null;
+    'pem': Buffer = null;
     // The instance of node-forge certificate object
-    'forge': any = null;
+    'forge': NodeForge.pki.Certificate = null;
+    // The issuer string for this certificate
+    'issuer': DistingishedName = null;
+    // The subject string for this certificate
+    'subject': DistingishedName = null;
+
+    static 'strict': boolean;
 
     /**
      * Basic constructor for the certificate object
-     * @param raw The raw characters of the decoded certificate
-     * @param pem The pem formatted certificate
+     * @param pem The raw characters of the decoded certificate
      * @param x509 The x509 object created from the PEM
      */
-    public constructor(raw: Buffer = null, pem: any = null, x509: any = null, forge: any = null)
+    public constructor(id: string, der: string, pem: Buffer = null)
     {
-        this.raw = raw;
+        this.id = id;
         this.pem = pem;
-        this.x509 = x509;
-        this.forge = forge;
+        if (der != null)
+        {
+            this.der = der;
+            var obj = NodeForge.asn1.fromDer(this.der, Certificate.strict);
+            this.forge = NodeForge.pki.certificateFromAsn1(obj);
+            //this.forge = NodeForge.pki.certificateFromPem(pem.toString('binary'));
+            this.issuer = DistingishedName.getFromNodeForgeDistingishedName(this.forge.issuer.attributes);
+            this.subject = DistingishedName.getFromNodeForgeDistingishedName(this.forge.subject.attributes);
+        }
+    }
+
+    public get isIdentityCertificate() : boolean
+    {
+        return (this.subject.lookupString == this.subject.identityString);
     }
 
     /**
@@ -67,19 +87,34 @@ export default class Certificate
      * 
      * @param tlsCertificate
      */
-    public static convertTLSCertificate(tlsCertificate: TLS.DetailedPeerCertificate) : Certificate
+    public static fromTLSCertificate(tlsCertificate: TLS.DetailedPeerCertificate) : Certificate
     {
-        var certificate = new Certificate();
-        certificate.raw = tlsCertificate.raw;
-        certificate.pem = null;
-        certificate.x509 = {
-            issuer: this.convertTLSDistingishedName(tlsCertificate.issuer),
-            subject: this.convertTLSDistingishedName(tlsCertificate.subject),
-            publicKey: { 
-                'n': tlsCertificate.modulus,
-            }
-        };
+        var certificate = new Certificate(null,tlsCertificate.raw.toString('binary'));
         return certificate;
+    }
+
+    /**
+     * Helper function to process a given pemCertificate buffer and returns instance of the
+     * constructed certificate object.
+     * @param id 
+     * @param pemBuffer 
+     */
+    public static fromPEM(id, pemBuffer) : Certificate
+    {
+        var msg = NodeForge.pem.decode(pemBuffer)[0];
+
+        if(msg.type !== 'CERTIFICATE' &&
+          msg.type !== 'X509 CERTIFICATE' &&
+          msg.type !== 'TRUSTED CERTIFICATE') {
+          var error: any = new Error('Could not convert certificate from PEM; PEM header type ' +
+            'is not "CERTIFICATE", "X509 CERTIFICATE", or "TRUSTED CERTIFICATE".');
+          error.headerType = msg.type;
+          throw error;
+        }
+        if(msg.procType && msg.procType.type === 'ENCRYPTED') {
+          throw new Error('Could not convert certificate from PEM; PEM is encrypted.');
+        }
+        return new Certificate(id, msg.body, pemBuffer);
     }
 
     /**
@@ -103,49 +138,12 @@ export default class Certificate
     }
 
     /**
-     * Helper function to process a given certificate file path and returns the instance of
-     * the certificate object.
-     * 
-     * @param certPath Path to the certificate file.
-     * @return Promise of a Certificate object
+     * Convert the node forge distingishedName either issue or subject.
+     * @param distingishedName 
      */
-    /*
-    public static readCertFileAsync(certPath) : Promise<Certificate>
+    private static convertNodeForgeDistingishedName(distingishedName: any) : any
     {
-        return new Promise( async (resolve, reject) =>
-        {
-            try 
-            {
-                var certificate = new Certificate();
-                certificate.raw = await readFileAsync(certPath);
-	            certificate.x509 = X509.parseCert(certificate.raw.toString());
-	            certificate.pem = PemTools(certificate.raw.toString());	    
-
-        	    return resolve(certificate);
-            } 
-            catch (err) 
-            {
-		        return reject(err);
-	        }
-        });
-    }
-    */
-
-    /**
-     * Compare two distinished names and return true if they are infact the same
-     */
-    public static compareDistingishedNames(distingishedNameA: Object, distingishedNameB: Object) : boolean
-    {
-        var nameFieldsA = Object.keys(distingishedNameA);
-        var nameFieldsB = Object.keys(distingishedNameB);
-
-        if (nameFieldsA.length != nameFieldsB.length) return false;
-        for (var i = 0; i < nameFieldsA.length; i++) {
-            let nameField = nameFieldsA[i];
-            if (!distingishedNameB.hasOwnProperty(nameField)) return false;
-            if (distingishedNameA[nameField] !== distingishedNameB[nameField]) return false;
-        }
-        return true;
+        return NodeForge.pki.certificateFromPem( distingishedName).issuer.attributes
     }
     
     /**
@@ -198,46 +196,22 @@ export default class Certificate
     }
 
     /**
+     * Returns true if the certificates are the same
+     * @param certificate The certificate to check
+     */
+    public equals(certificate: Certificate) : boolean
+    {
+        return this.der === certificate.der;
+    }
+
+    /**
      * Returns true if the certificate is a self signed certificate.
      * 
      * @return true if the certificate is self signed.
      */
     public isSelfSigned() : boolean
     {
-        return Certificate.compareDistingishedNames(this.issuer,this.subject);
-    }
-
-    /**
-     * Returns the associated array of issuer components, or null if certificate has no valid issuer.
-     * 
-     * @return An associated array of issuer components, or null.
-     */
-    get issuer() : any
-    {
-        if (this.x509 == null) throw new Error('certificate not initialised with valid certificate');
-        return this.x509.issuer;
-    }
-
-    /**
-     * Return the associated array of subject components, or null if certificate has no valid subject.
-     * 
-     * @return An associated array of subject components, or null.
-     */
-    get subject() : any
-    {
-        if (this.x509 == null) throw new Error('certificate not initialised with valid certificate');
-        return this.x509.subject;
-    }
-
-    /**
-     * Return the associated array of public-key components, or null if certificate has no valid subject.
-     * 
-     * @return An associated array of public-key components, or null.
-     */
-    get publicKey() : any
-    {
-        if (this.x509 == null) return null;
-        return this.x509.publicKey;
+        return this.subject.equals(this.issuer);
     }
 
     /**

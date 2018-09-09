@@ -1,0 +1,1 @@
+{"version":3,"file":"CertificateListError.js","sourceRoot":"","sources":["../../../../../ts-src/lib/TemperanceIdentity/Errors/CertificateListError.ts"],"names":[],"mappings":";AAAA;;;;GAIG;AACH,6BAA6B;;AAE7B,2CAAmC;AAEnC;;GAEG;AACH,0BAA0C,SAAQ,mBAAS;IAGvD,YAAY,OAAe,EAAE,iBAA+B;QAExD,KAAK,CAAC,OAAO,CAAC,CAAC;QACf,IAAI,CAAC,iBAAiB,GAAG,iBAAiB,CAAC;IAC/C,CAAC;CACJ;AARD,uCAQC"}

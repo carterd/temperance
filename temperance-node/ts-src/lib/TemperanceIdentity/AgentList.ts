@@ -27,6 +27,14 @@ export default class AgentList extends IdObjectList<Agent>
     }
 
     /**
+     * Accessor returns all the objects as an array
+     */
+    public get agents() : Array<Agent>
+    {
+        return this._objects;
+    }
+
+    /**
      * Ensure the agents held in the identity set have the same given identity
      * @param identity 
      */

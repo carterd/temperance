@@ -25,9 +25,13 @@ const readFileAsync = Util.promisify(FS.readFile);
 
 export default class Identity
 {
-    // Path location of the certificate file that identifies the identity.
-    'identityId': string;
+    // storage id
+    'id': string;
+    // identity string for identity.
+    'identityString': string;
+    // Certificates that are the identity
     'identityCertificates': CertificateList;
+    // Agents that represent users of the identity
     'agents': AgentList;
 
     /**
@@ -38,21 +42,36 @@ export default class Identity
      * @param certificate the certificate object
      * @return the certificate's issuer also used as the identity string
      */
-    public static validateIdentityCertificate(identityCertificates: CertificateList, identityString: string): void
+    public static validateIdentityCertificates(identityCertificates: CertificateList, identityString: string): void
     {
-        if (identityCertificates.length != 1)
-            throw new Error("identity certificate chain is required to be a single certificate")
+        for (var identityCertificate of identityCertificates.certificates)
+        {
+            if (identityCertificate.subject.identityString != identityString)
+                throw new Error(Util.format("identity certificate subject '%s' doesn't match identity-string '%s", 
+                    identityCertificate.subject.identityString, identityString));
+            // Could possibly ensure self-signed for all identity certificates
+        }
+    }
 
-//        var hashObject = Certificate.uniqueIdentityToHashObject(identityCertificate.issuer['commonName']);
-//        var hash = Crypto.createHash(hashObject.hashType);
-
-//        hash.update(identityCertificate.publicKey['n']);
-//        if (hash.digest('hex') != hashObject.hashValue)
-//            throw new Error("identity certificate Common Name unique identity doesn't match it's public key");
-            
-//        var certIdentityString = Certificate.distingishedNameToIdentityString(identityCertificate.issuer)
-//        if  ( certIdentityString !== identityString)
-//            throw new Error(Util.format("identity certificate identityString '%s' doesn't match the configured identityString '%s'", certIdentityString, identityString));
+    public static validateAgents(identityAgents: AgentList, identityCertificates: CertificateList)
+    {
+        for (var agent of identityAgents.agents)
+        {
+            var matchIdentityCertificate : Certificate = null;
+            for (var identityCertificate of identityCertificates.certificates)
+            {
+                if (identityCertificate.forge.verify(agent.certificateChain.rootCertificate.forge))
+                {
+                    matchIdentityCertificate = identityCertificate;
+                    break;
+                }
+            }
+            if (matchIdentityCertificate == null)
+                throw new Error("agent's certificate chain doesn't match any identity certificates");
+            if (matchIdentityCertificate.subject.identityString != agent.identityString)
+                throw new Error(Util.format("agent's certificate identity '%s' doesn't match identity certificate identity '%s", 
+                    agent.identityString, matchIdentityCertificate.subject.identityString));
+        }
     }
 
     /**
@@ -63,9 +82,10 @@ export default class Identity
      * @param identityCertificate The identity certificate object
      * @param agentJsonFilenames The filenames of the agent json files
      */
-    public constructor(identityId: string, identityCertificates: CertificateList, agents: AgentList) 
+    public constructor(id: string, identityString: string, identityCertificates: CertificateList, agents: AgentList) 
     {
-        this.identityId = identityId;
+        this.id = id;
+        this.identityString = identityString;
         this.identityCertificates = identityCertificates;
         this.agents = agents;
         this.agents.setAgentsIdentity(this);

@@ -39,111 +39,131 @@ export default class IdentityHandler
      */
     public handler() : (req:any, res:any, next:any) => void
     {
-        return (req,res,next) => 
+        return async (req,res,next) => 
         {
             this.logger ? this.logger.debug(Util.format("IdentityHandler.handler() : start processing https request '%s'", req.originalUrl)) : null;
-            // Default is to have no identity
-            req.temperanceIdentity = null;
-            req.temperanceAgent = null;
             
-            var peerCerts : TLS.DetailedPeerCertificate = req.socket.getPeerCertificate(true);
-            var identityCert = this.getIdentityCert(peerCerts);
-            var agentCert = peerCerts;
-            if (identityCert != null)
+            var peerTLSCertifcate : TLS.DetailedPeerCertificate = req.socket.getPeerCertificate(true);
+            var peerCertificate = this.getCertificateFromTLSCertificate(peerTLSCertifcate);
+            var agent = await this.getAgentFromCertificateAsync(peerCertificate);
+            req.temperanceAgent = agent;
+            req.temperanceIdentity = null;
+
+            if (peerTLSCertifcate == null)
             {
-                this.logger ? this.logger.debug(Util.format("IdentityHandler.handler() : identity certificate given with issuer '%s'", identityCert.issuer)) : null ;
-                var identity = this.getIdenitity(identityCert);
-                if (identity != null)
-                {
-                    this.logger ? this.logger.debug(Util.format("IdentityHandler.handler() : matching identity '%s' found in acquaintances", identity.identityString)) : null;
-                    var agent = this.getAgent(agentCert, identity);
-                    if (agent != null)
-                    {
-                        this.logger ? this.logger.debug(Util.format("IdentityHandler.handler() : matching agent '%s' found for identity", agent.agentString)) : null;
-                    }
-                    else
-                    {
-                        this.logger ? this.logger.debug("IdentityHandler.handler() : no matching agent found for identity") : null;        
-                    }
-                }
-                else
-                {
-                    this.logger ? this.logger.debug("IdentityHandler.handler() : no matching identity found in acquaintances") : null;
-                }
-                req.temperanceIdentity = identity;
-                req.temperanceAgent = agent;
+                this.logger ? this.logger.debug("IdentityHandler.handler() : no client certificate given on request") : null;
+                this.handleConnectionHasNoClientCertificate(req, res, next);
+                return;
             }
-            else {
-                this.logger ? this.logger.debug("IdentityHandler.handler() : no identity certificate was derivied from peer") : null;
+            if (agent == null)
+            {
+                this.logger ? this.logger.debug("IdentityHandler.handler() : no agent found that matches request subject") : null;
+                this.handleConnectionHasNoMatchingAgent(req, res, next);
+                return;
             }
-            this.logger ? this.logger.debug("IdentityHandler.handler() : finished processing https request") : null;
+            if (!agent.certificateChain.entityCertificiate.equals(peerCertificate))
+            {
+                this.logger ? this.logger.debug("IdentityHandler.handler() : agent found but doesn't match certificate") : null;
+                this.handleConnectionHasMatchingAgentWithMismatchedCertificate(req, res, next);
+                return;
+            }
+
+            this.logger ? this.logger.debug("IdentityHandler.handler() : agent found with matching certificate") : null;
+            console.log(peerCertificate);
             next();
-        };
-    }
-
-    /**
-     * Given the TLS root certificate return the identity object
-     * 
-     * @param identityCertificate 
-     */
-    public getIdenitity(identityCertificate: TLS.DetailedPeerCertificate) : Identity
-    {
-        try
-        {
-            var certificate: Certificate = Certificate.convertTLSCertificate(identityCertificate);
-            var identityString: string = Certificate.distingishedNameToIdentityString(certificate.issuer);
-
-            if (this._selfIdentity.identityString === identityString)
-                return this._selfIdentity;
-            else
-                return this._acquaintances.identityStringMap.get(identityString);
-        } 
-        catch (error)
-        {
-            // This will happen if say the certificate hasn't got the required identity terms in the issuer name
-            return null;
+            return;
         }
     }
 
     /**
-     * Given the TLS peer certificate return the agent object
-     * @param agentCertificate 
-     * @param identity 
+     * This is the handler for the client that presents no certificate in the TLS connection
+     * @param req The request object
+     * @param res The response object
      */
-    public getAgent(agentCertificate: TLS.DetailedPeerCertificate, identity: Identity)
+    protected handleConnectionHasNoClientCertificate(req, res, next)
     {
-        try
-        {
-            var certificate: Certificate = Certificate.convertTLSCertificate(agentCertificate);
-            var agentString: string = Certificate.distingishedNameToAgentString(certificate.subject);
-            return identity.agentStringMap.get(agentString);
+        throw new Error("no client certifcate give");
+    }
 
-        }
-        catch (error)
-        {
-            // This will happen if say the certificate hasn't got the required agent terms in the subject name
-            return null;
-        }
+
+    /**
+     * Handler for the client which is not recognised as a known acquaintance
+     * @param req 
+     * @param res 
+     * @param peerTLSCertifcate 
+     * @param clientAgentCertificate 
+     */
+    protected handleConnectionHasNoMatchingAgent(req, res, next)
+    {
+        throw new Error("No matching agent in acquatances, who is this");
     }
 
     /**
-     * Follow the given certificate chain and get the identity self signed cert or return null
-     * if an intermediate certificate is missing.
-     *
-     * @param peerCerts A set of certs to identity the peer
-     * @return The cert which is the self referencing identity or null if self reference cert is missing
+     * Handler for the client which is not recognised as a known acquaintance
+     * @param req 
+     * @param res 
+     * @param peerTLSCertifcate 
+     * @param clientAgentCertificate 
      */
-    public getIdentityCert(peerCerts) : TLS.DetailedPeerCertificate
+    protected handleConnectionHasMatchingAgentWithMismatchedCertificate(req, res, next)
     {
-        // End of chain with no identity cert if chain ends without selfsigned certificate
-        if (peerCerts.issuerCertificate == null)
-            return null;
-        // End of chain either at self signed or failure to find intermediate certificate
-        if (peerCerts.issuerCertificate === peerCerts) 
+        throw new Error("Matching agent in acquatances, with mismatched certificate, is this a fake certificate");
+    }
+
+
+    /**
+     * Handles the a connection with a know acquaintance
+     * @param req 
+     * @param res 
+     * @param peerTLSCertifcate 
+     * @param clientAgentCertificate 
+     * @param agent 
+     
+    protected handleConnectionHasMatchingAgent(req, res, peerTLSCertifcate : TLS.DetailedPeerCertificate, clientAgentCertificate : Certificate, agent: Agent)
+    {
+        if (!clientAgentCertificate.equals(agent.certificateChain.entityCertificiate))
         {
-	        return peerCerts;
+            this.logger ? this.logger.error(Util.format("IdentityHandler.handler() : the client certificates dont match")) : null;
+            this.handleConnectionHasMatchingAgentMismatchCertificate();
+            return;
         }
-        //  chase to the bottom of the chain if it's available
-        return this.getIdentityCert(peerCerts.issuerCertificate);
+
+        req.temperanceAgent = agent;
+    }
+*/
+
+    /**
+     * Get an agent from TLSCertificate
+     * @param tlsCertificate This is the certificate from the TLS connection
+     */
+    protected async getAgentFromTLSCertificateAsync(tlsCertificate : TLS.DetailedPeerCertificate) : Promise<Agent>
+    {
+        var clientAgentCertificate = this.getCertificateFromTLSCertificate(tlsCertificate);
+        var agent = await this.getAgentFromCertificateAsync(clientAgentCertificate);
+        return agent;
+    }
+
+    /**
+     * Get a certificate from the Certificate object, returns null if no certificate given
+     * @param certificate 
+     */
+    protected async getAgentFromCertificateAsync(certificate : Certificate) : Promise<Agent>
+    {
+        if (certificate == null)
+            return null;
+        var agentLookupString = certificate.subject.lookupString;
+        var agent = await this._acquaintances.getAgentFromAgentStringAsync(agentLookupString);
+        return agent;
+    }
+
+    /**
+     * Get a certificate from the TLS Certificate
+     * @param tlsCertificate 
+     */
+    protected getCertificateFromTLSCertificate(tlsCertificate : TLS.DetailedPeerCertificate) : Certificate
+    {
+        if (tlsCertificate == null)
+            return null;
+        return Certificate.fromTLSCertificate(tlsCertificate);
     }
 }

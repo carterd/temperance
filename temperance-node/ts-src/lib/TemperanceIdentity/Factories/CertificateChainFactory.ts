@@ -20,19 +20,16 @@ export default class CertificateChainFactory extends CertificateListFactory
      * Convert the given certificate ids into a certificate chain
      * @param certificateChainIds the list of certifcate ids to construct the certificate chain 
      */
-    public getCertificateChainAsync(certificateChainIds: Array<string>) : Promise<CertificateChain>
+    public async getCertificateChainAsync(certificateChainIds: Array<string>) : Promise<CertificateChain>
     {
-        return new Promise(async (resolve, reject) => 
+        try
         {
-            try
-            {
-                var certificateList = await this.getCertificateListAsync(certificateChainIds);
-                return resolve(new CertificateChain(certificateList.certificates, certificateList.ids));
-            }
-            catch (error)
-            {
-                return reject(error);
-            }
-        });
+            var certificateList = await this.getCertificateListAsync(certificateChainIds);
+            return new CertificateChain(certificateList.certificates, certificateList.ids);
+        }
+        catch (error)
+        {
+            throw error;
+        }
     }
 }

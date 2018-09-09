@@ -19,14 +19,14 @@ export default interface AgentStore
      * Returns the state of the AgentStore true for inialised and false for
      * the store requiring an initailse to be called.
      */
-    initalised: boolean;
+    'initialised': boolean;
 
     /**
      * The AgentStore maybe required to be inialised asynchronusly hence
      * initalise returning a promise object. Once the IdentityFactory has been
      * initalised then the inialised attribute of the factory returns true.
      */
-    initaliseAsync(): Promise<void>;
+    initialiseAsync(): Promise<void>;
 
     /**
      * Once initalised the factory will return an identity form the factory given
@@ -34,4 +34,10 @@ export default interface AgentStore
      * each time the function is called.
      */
     getAgentAsync(id: string): Promise<Agent>;
+
+    /**
+     * Once initalised the factory will return an identity from the store given
+     * a identity string.
+     */
+    getAgentFromAgentStringAsync(agentString: string): Promise<Agent>;
 }

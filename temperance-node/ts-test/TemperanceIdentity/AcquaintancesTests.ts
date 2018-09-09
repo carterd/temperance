@@ -5,7 +5,7 @@ chai.should();
 chai.use(chaiAsPromised);
 
 import Acquaintances from '../../ts-src/lib/TemperanceIdentity/Acquaintances';
-import { IdentityReadErrors } from '../../ts-src/lib/TemperanceIdentity/Acquaintances';
+//import { IdentityReadErrors } from '../../ts-src/lib/TemperanceIdentity/Acquaintances';
 /*
 describe('Class Aquaintances', function() {
     describe('readIdentityJsonPathAsync', function() { 

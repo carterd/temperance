@@ -11,33 +11,39 @@ import * as Path from 'path';
 
 export default class Config
 {
-    private static readonly ACQ_IDENT_JSON_DIR = 'acquaintances-identities-json-dir';
-    private static readonly ACQ_AGENT_JSON_DIR = 'acquaintances-agents-json-dir';
-    private static readonly ACQ_IDENT_CERT_DIR = 'acquaintances-identities-cert-dir';
-    private static readonly ACQ_AGENT_CERT_DIR = 'acquaintances-agents-cert-dir';
-    private static readonly SELF_IDENT_JSON_PATH = 'self-identity-json-path';
+    private static readonly MONGO_URL           = 'mongodb://localhost:27017';
+    private static readonly ACQ_IDENT_JSON_DIR  = 'acquaintances-identities-json-dir';
+    private static readonly ACQ_AGENT_JSON_DIR  = 'acquaintances-agents-json-dir';
+    private static readonly ACQ_IDENT_CERT_DIR  = 'acquaintances-identities-cert-dir';
+    private static readonly ACQ_AGENT_CERT_DIR  = 'acquaintances-agents-cert-dir';
+    private static readonly SELF_IDENT_JSON_DIR = 'self-identity-json-dir';
     private static readonly SELF_IDENT_CERT_DIR = 'self-identity-cert-dir';
+    private static readonly SELF_IDENT_ID       = 'self-identity-id';
     private static readonly SELF_AGENT_JSON_DIR = 'self-agent-json-dir';
     private static readonly SELF_AGENT_CERT_DIR = 'self-agent-cert-dir';
-    private static readonly SELF_AGENT_JSON = 'self-agent-json';
+    private static readonly SELF_AGENT_ID       = 'self-agent-id';
     private static readonly SELF_AGENT_KEYS_DIR = 'self-agent-keys-dir';
-    private static readonly SUPPORTED_SERVICES = 'self-supported-services';
+    private static readonly SELF_AGENT_KEY_ID   = 'self-agent-key-id';
+    private static readonly SUPPORTED_SERVICES  = 'self-supported-services';
     private static readonly SERVICE_MODULES_DIR = 'service-modules-dir';
-    private static readonly SERVICE_PORT = 'service-port';
+    private static readonly SERVICE_PORT        = 'service-port';
 
     private static readonly REQUIRED_CONFIG = [ 
+        Config.MONGO_URL,
         Config.ACQ_IDENT_JSON_DIR, 
         Config.ACQ_AGENT_JSON_DIR,
         Config.ACQ_IDENT_CERT_DIR,
         Config.ACQ_AGENT_CERT_DIR,
-        Config.SELF_IDENT_JSON_PATH,
+        Config.SELF_IDENT_JSON_DIR,
+        Config.SELF_IDENT_ID,
         Config.SELF_IDENT_CERT_DIR,
         Config.SELF_AGENT_JSON_DIR,
         Config.SELF_AGENT_CERT_DIR,
+        Config.SELF_AGENT_KEY_ID,
         Config.SUPPORTED_SERVICES,
         Config.SERVICE_MODULES_DIR,
         Config.SERVICE_PORT,
-        Config.SELF_AGENT_JSON,
+        Config.SELF_AGENT_ID,
         Config.SELF_AGENT_KEYS_DIR
     ];
     // The nconf library used to access the conf details
@@ -93,6 +99,11 @@ export default class Config
         return Path.join(this._baseDir, this.get(confKey));
     }
 
+    public get mongoUrl(): string
+    {
+        return this.get(Config.MONGO_URL);
+    }
+
     /**
      * Get the acquaintances identity json directory
      */
@@ -128,9 +139,9 @@ export default class Config
     /**
      * Get the node service instance identity json file path
      */
-    public get selfIdentityJsonPath(): string
+    public get selfIdentityJsonDir(): string
     {
-        return this.getDir(Config.SELF_IDENT_JSON_PATH);
+        return this.getDir(Config.SELF_IDENT_JSON_DIR);
     }
 
     /**
@@ -139,6 +150,16 @@ export default class Config
     public get selfIdentityCertificateDir(): string
     {
         return this.getDir(Config.SELF_IDENT_CERT_DIR);
+    }
+
+    public get selfIdentityId(): string
+    {
+        return this.get(Config.SELF_IDENT_ID);
+    }
+
+    public get selfAgentKeyId(): string
+    {
+        return this.get(Config.SELF_AGENT_KEY_ID);
     }
 
     /**
@@ -184,9 +205,9 @@ export default class Config
     /**
      * Get the service's agent json
      */
-    public get selfAgentJson(): string
+    public get selfAgentId(): string
     {
-        return this.get(Config.SELF_AGENT_JSON);
+        return this.get(Config.SELF_AGENT_ID);
     }
 
     /**

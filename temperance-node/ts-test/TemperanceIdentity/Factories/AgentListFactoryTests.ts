@@ -12,22 +12,23 @@ import AgentStore from '../../../ts-src/lib/TemperanceIdentity/FileSystem/AgentS
 import AgentListFactory from '../../../ts-src/lib/TemperanceIdentity/Factories/AgentListFactory';
 import AgentListError from '../../../ts-src/lib/TemperanceIdentity/Errors/AgentListError';
 import AgentList from '../../../ts-src/lib/TemperanceIdentity/AgentList';
+import DirectoryAccess from '../../../ts-src/lib/FileSystem/DirectoryAccess';
 
-var certDir = "./ts-test/TemperanceIdentity/data/agents/agents/certificates";
-var agentDir = "./ts-test/TemperanceIdentity/data/agents/agents/";
+var certDirAccess = new DirectoryAccess("./ts-test/TemperanceIdentity/data/agents/agents/certificates");
+var agentDirAccess = new DirectoryAccess("./ts-test/TemperanceIdentity/data/agents/agents/");
 
-var agentOne = new Agent("one",null,null,null), agentTwo = new Agent("two", null,null,null), agentThree = new Agent("three",null,null,null);
-var validAgentStore = new AgentStore(agentDir, null);
+var agentOne = new Agent("one","one",null,null,null,null), agentTwo = new Agent("two","two", null,null,null,null), agentThree = new Agent("three","three",null,null,null,null);
+var validAgentStore = new AgentStore(agentDirAccess, null);
 sinon.stub(validAgentStore, "getAgentAsync")
     .withArgs('one').resolves(agentOne)
     .withArgs('two').resolves(agentTwo)
     .withArgs('three').resolves(agentThree);
-var missingCertificateStore = new AgentStore(agentDir, null);
+var missingCertificateStore = new AgentStore(agentDirAccess, null);
 sinon.stub(missingCertificateStore, "getAgentAsync")
     .withArgs('one').resolves(agentOne)
     .withArgs('two').resolves(agentTwo)
     .withArgs('three').resolves(null);
-var missingCertificateStore = new AgentStore(certDir, null);
+var missingCertificateStore = new AgentStore(certDirAccess, null);
 sinon.stub(missingCertificateStore, "getAgentAsync")
     .withArgs('one').resolves(agentOne)
     .withArgs('two').resolves(agentTwo)
@@ -38,7 +39,7 @@ describe('Class AgentListFactory', function() {
         it('success', function(done) {
             var agentSetFactory = new AgentListFactory(validAgentStore);
             agentSetFactory.logger = TestConfig.logger;
-            agentSetFactory.getAgentSetAsync( ['one','two','three' ] ).then( (value) => {
+            agentSetFactory.getAgentListAsync( ['one','two','three' ] ).then( (value) => {
                 value.getById('one').should.equal(agentOne);
                 value.getById('two').should.equal(agentTwo);
                 value.getById('three').should.equal(agentThree);
@@ -50,7 +51,7 @@ describe('Class AgentListFactory', function() {
         it('failed with missing agent', function(done) {
             var certificateChainFactory = new AgentListFactory(missingCertificateStore);
             certificateChainFactory.logger = TestConfig.logger;
-            certificateChainFactory.getAgentSetAsync( ['one','two','three' ]).then( (value) => {
+            certificateChainFactory.getAgentListAsync( ['one','two','three' ]).then( (value) => {
                 done("should return with error");
             }).catch( (error) => {
                 error.should.be.instanceof(AgentListError);
@@ -60,7 +61,7 @@ describe('Class AgentListFactory', function() {
         it('failed with bad agent', function(done) {
             var certificateChainFactory = new AgentListFactory(missingCertificateStore);
             certificateChainFactory.logger = TestConfig.logger;
-            certificateChainFactory.getAgentSetAsync( ['one','two','three' ]).then( (value) => {
+            certificateChainFactory.getAgentListAsync( ['one','two','three' ]).then( (value) => {
                 done("should return with error");
             }).catch( (error) => {
                 error.should.be.instanceof(AgentListError);

@@ -1,5 +1,5 @@
 {
-    "identityString": "sha1:a1005034045d3d8fe4620c56ea336ec15dfba9d4/Tes/Tes/TT/Solihull/West-Midlands/UK/temperance",
-    "certificateFilename": "identity-cert.pem",
-    "agentFilenames": [ "test.service.json" ]
+    "identityString": "CN@sha1:a1005034045d3d8fe4620c56ea336ec15dfba9d4\\SN@Tes\\GN@Tes\\I@TT\\C@UK\\ST@West-Midlands\\L@Solihull\\O@temperance",
+    "certificateId": "identity-cert.pem",
+    "agentIds": [ "test.service.json" ]
 }

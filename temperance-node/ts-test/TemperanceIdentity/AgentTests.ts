@@ -4,7 +4,6 @@ import * as chaiAsPromised from 'chai-as-promised';
 chai.should();
 chai.use(chaiAsPromised);
 
-const pemtools = require('pemtools');
 import Agent from '../../ts-src/lib/TemperanceIdentity/Agent';
 import Identity from '../../ts-src/lib/TemperanceIdentity/Identity';
 /*

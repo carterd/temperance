@@ -43,6 +43,18 @@ export default class ObjectList<T>
             }
         }
     }
+
+    /**
+     * Slices the given certificate 
+     * @param start index at which being slice
+     * @param end extracts upto but not include index
+     */
+    public slice(start : number, end: number)
+    {
+        this._objectIds = this._objectIds.slice(start, end);
+        this._objects = this._objects.slice(start, end);
+    }
+
     /**
      * Appends a certificate to the end of the chain (i.e. adds a new parent to the chain)
      * @param certificate 
@@ -63,6 +75,10 @@ export default class ObjectList<T>
         this._objects.unshift(object);
     }
 
+    /**
+     * Return the object via a given id, or null if id not found
+     * @param id the id to identify the requested object
+     */
     public getById(id: string): T
     {
         var index = this._objectIds.indexOf(id);
@@ -88,6 +104,9 @@ export default class ObjectList<T>
         return this._objects.length;
     }
 
+    /**
+     * Iterator for the objects
+     */
     public values(): IterableIterator<T>
     {
         return this._objects.values();

@@ -27,6 +27,9 @@ export default class CertificateList extends IdObjectList<Certificate>
         super(certificates, certificateIds);
     }
 
+    /**
+     * Parameter certificates is the objects
+     */
     public get certificates() : Array<Certificate>
     {
         return this._objects;

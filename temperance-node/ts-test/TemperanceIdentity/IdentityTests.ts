@@ -4,8 +4,8 @@ import * as chaiAsPromised from 'chai-as-promised';
 chai.should();
 chai.use(chaiAsPromised);
 
-const pemtools = require('pemtools');
 import Identity from '../../ts-src/lib/TemperanceIdentity/Identity';
+import DirectoryAccess from '../../ts-src/lib/FileSystem/DirectoryAccess';
 
 /*
 describe('Class Identity', function() {

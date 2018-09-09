@@ -14,75 +14,55 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-const Identity_1 = require("./Identity");
 const FS = require("fs");
 const Util = require("util");
-const Path = require("path");
 const readDirAsync = Util.promisify(FS.readdir);
 const statAsync = Util.promisify(FS.stat);
 class Acquaintances {
     /**
      * Constructor for the acquaintiances container object, which holds a store of identityes
      */
-    constructor(identityJsonDir, identityCertificateDir, agentJsonDir, agentCertificateDir) {
-        this._identityJsonDir = identityJsonDir;
-        this._identityCertificateDir = identityCertificateDir;
-        this._agentJsonDir = agentJsonDir;
-        this._agentCertificateDir = agentCertificateDir;
-        this._identityMap = new Map();
-        this._identityStringMap = new Map();
+    constructor(identityStore, identityCertificateStore, agentStore, agentCertificateStore) {
+        this.initialised = false;
+        this._identityStore = identityStore;
+        this._identityCertificateStore = identityCertificateStore;
+        this._agentStore = agentStore;
+        this._agentCertificateStore = agentCertificateStore;
     }
     /**
-     * Returns a promise to read the current configured directory of identities
+     * The wrapper to ensure the initialise of sub objects.
      */
-    readAcquaintancesAsync() {
-        return new Promise((resolve, reject) => __awaiter(this, void 0, void 0, function* () {
-            var acquaintancesReadErrors = new Map();
-            this._identityMap = new Map();
-            try {
-                this.logger ? this.logger.debug(Util.format("Acquaintances.readAcquaintancesAsync() : reading identities json from directory '%s'", this._identityJsonDir)) : null;
-                var identityJsonFilenames = yield readDirAsync(this._identityJsonDir);
-                for (var identityJsonFilename of identityJsonFilenames) {
-                    if (Path.extname(identityJsonFilename) == ".json") {
-                        var identityJsonPath = Path.join(this._identityJsonDir, identityJsonFilename);
-                        var identityJsonStat = yield statAsync(identityJsonPath);
-                        if (identityJsonStat.isFile()) {
-                            var identityReadErrors = { 'identityError': null, 'agentErrors': null };
-                            try {
-                                this.logger ? this.logger.debug(Util.format("Acquaintances.readAcquaintancesAsync() : reading identity json file '%s'", identityJsonFilename)) : null;
-                                var identity = yield Identity_1.default.readIdentityFileAsync(identityJsonPath, this._identityCertificateDir, this.logger);
-                                this.logger ? this.logger.debug(Util.format("Acquaintances.readAcquaintancesAsync() : reading agent json files specified in identity json file '%s'", identityJsonFilename)) : null;
-                                var agentErrors = yield identity.readAgentFilesAsync(this._agentJsonDir, this._agentCertificateDir, this.logger);
-                                if (agentErrors.size > 0) {
-                                    agentErrors.forEach((value, key) => {
-                                        this.logger ? this.logger.error(Util.format("Acquaintances.readAcquaintancesAsync() : error reading agent json file '%s' identified in identity json file '%s'", key, identityJsonFilename)) : null;
-                                    });
-                                    identityReadErrors.agentErrors = agentErrors;
-                                }
-                                this._identityMap.set(identityJsonFilename, identity);
-                                this._identityStringMap.set(identity.identityString, identity);
-                            }
-                            catch (error) {
-                                this.logger ? this.logger.error(Util.format("Acquaintances.readAcquaintancesAsync() : error reading identity json file '%s'", identityJsonFilename)) : null;
-                                identityReadErrors.identityError = error;
-                            }
-                            acquaintancesReadErrors.set(identityJsonFilename, identityReadErrors);
-                        }
-                    }
-                }
-                this._acquaintancesReadErrors = acquaintancesReadErrors;
-                resolve(acquaintancesReadErrors);
-            }
-            catch (err) {
-                return reject(err);
-            }
-        }));
+    initialiseAsync() {
+        return __awaiter(this, void 0, void 0, function* () {
+            this.logger ? this.logger.debug("Acquaintances.initialiseAsync : initialise agent certificate store") : null;
+            if (!this._agentCertificateStore.initialised)
+                yield this._agentCertificateStore.initialiseAsync();
+            this.logger ? this.logger.debug("Acquaintances.initialiseAsync : initialise agent store") : null;
+            if (!this._agentStore.initialised)
+                yield this._agentStore.initialiseAsync();
+            this.logger ? this.logger.debug("Acquaintances.initialiseAsync : initialise identity certificate store") : null;
+            if (!this._identityCertificateStore.initialised)
+                yield this._identityCertificateStore.initialiseAsync();
+            this.logger ? this.logger.debug("Acquaintances.initialiseAsync : initialise identity store") : null;
+            if (!this._identityStore.initialised)
+                yield this._identityStore.initialiseAsync();
+            this.logger ? this.logger.debug("Acquaintances.initialiseAsync : done") : null;
+            this.initialised = true;
+            return;
+        });
     }
-    get identityMap() {
-        return this._identityMap;
+    /**
+     * Map of any errors that occured in reading the identities
+     */
+    get identityErrors() {
+        return this._identityStore.identityErrors;
     }
-    get identityStringMap() {
-        return this._identityStringMap;
+    /**
+     * Returns the Agent from a given agent string
+     * @param agentString
+     */
+    getAgentFromAgentStringAsync(agentString) {
+        return this._agentStore.getAgentFromAgentStringAsync(agentString);
     }
 }
 exports.default = Acquaintances;

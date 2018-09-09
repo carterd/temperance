@@ -6,25 +6,24 @@
 
 /// <reference types="node"/>
 
-import Certificate from "../Certificate";
-import CertificateFactoryInterface from "../Stores/CertificateStore";
+// File System Errors
 import ReadError from './Errors/ReadError';
+import DirectoryAccess from '../../FileSystem/DirectoryAccess'
 
-import * as FS from 'fs';
+// Node Libraries
 import * as Util from 'util';
 import * as Path from 'path';
 
-const readFileAsync = Util.promisify(FS.readFile);
-const readDirAsync = Util.promisify(FS.readdir);
-const statAsync = Util.promisify(FS.stat);
-
+/**
+ * Base class for file system stores
+ */
 export default class FileSystemStore<T>
 {
     /**
      * Returns the state of the CertificateFactory true for inialised and false for
      * the CertificateFactory requiring an initailse to be called.
      */
-    'initalised': boolean;
+    'initialised': boolean;
 
     /**
      * This is the store of the latest initialsie and any read errors with processing files
@@ -39,7 +38,7 @@ export default class FileSystemStore<T>
     /**
      * The identity path for which the factory will use as source identities
      */
-    private _filesDir: string;
+    protected _directoryAccess: DirectoryAccess;
 
     /**
      * optional extention match string
@@ -56,11 +55,56 @@ export default class FileSystemStore<T>
      * the identities serviced by the factory are located
      * @param filesDir 
      */
-    constructor( filesDir: string , fileExtension)
+    constructor( directoryAccess: DirectoryAccess , fileExtension)
     {
-        this.initalised = false;
-        this._filesDir = filesDir;
+        this.initialised = false;
+        this._directoryAccess = directoryAccess;
         this._fileExtension = fileExtension;
+    }
+    /**
+     * The wrapper to ensure the initialise of certificates is correct.
+     */
+    public async initialiseAsync(): Promise<void> 
+    {
+        // This is not to be a caching store
+        //await this.cacheEntireStore();
+        this.initialised = true;
+    }
+
+    /**
+     * Gets all the ids of the objets stored in this store
+     */
+    public async getAllStoreIdsAsync() : Promise<Array<string>>
+    {
+        var ids = new Array<string>();
+        try
+        {
+            this.logger ? this.logger.debug(Util.format("FileSystemStore.getAllStoreIdsAsync() : reading files from directory '%s'", this._directoryAccess.directory)) : null;
+            var filenames = await this._directoryAccess.readDirAsync();
+            for (var filename of filenames)
+            {
+                if (this._fileExtension == null || Path.extname(filename) == this._fileExtension)
+                {
+                    try
+                    {
+                        var fileStat = await this._directoryAccess.statAsync(filename);
+                        if (fileStat.isFile())
+                        {
+                            ids.push(filename);
+                        }
+                    } 
+                    catch (error)
+                    {
+                        this.readErrors = error;
+                    }
+                }
+            }
+            return ids;
+        }
+        catch (error)
+        {
+            throw error;
+        }
     }
 
     /**
@@ -68,45 +112,41 @@ export default class FileSystemStore<T>
      * initalise returning a promise object. Once the IdentityFactory has been
      * initalised then the inialised attribute of the factory returns true.
      */
-    protected cacheEntireStore() : Promise<void>
+    protected async cacheEntireStore() : Promise<void>
     {
-        return new Promise( async (resolve, reject) =>
-	    {
-            this.readErrors = new Map<string, ReadError>();
-            this._objectCache = new Map<string, T>();
-		    try 
-		    {
-                this.logger ? this.logger.debug(Util.format("FileSystemStore.cacheEntireStore() : reading files from directory '%s'", this._filesDir)) : null;
-	    	    var filenames = await readDirAsync(this._filesDir);
-			    for (var filename of filenames) 
-			    {
-                    if (this._fileExtension == null || Path.extname(filename) == this._fileExtension)
+        this.readErrors = new Map<string, ReadError>();
+        this._objectCache = new Map<string, T>();
+		try 
+		{
+            this.logger ? this.logger.debug(Util.format("FileSystemStore.cacheEntireStore() : reading files from directory '%s'", this._directoryAccess.directory)) : null;
+	    	var filenames = await this._directoryAccess.readDirAsync();
+			for (var filename of filenames)
+			{
+                if (this._fileExtension == null || Path.extname(filename) == this._fileExtension)
+                {
+                    try
                     {
-                        try
-                        {
-                            var obj = await this.storeReadFileAsync(filename);
-                            this._objectCache.set(filename, obj);
-                        } 
-                        catch (error)
-                        {
-                            this.readErrors = error;
-                        }
+                        var obj = await this.storeReadFileAsync(filename);
+                        this._objectCache.set(filename, obj);
+                    } 
+                    catch (error)
+                    {
+                        this.readErrors = error;
                     }
                 }
-	    	    return resolve();
-		    }
-		    catch (error) 
-		    {
-    			return reject(error);
-		    }
-        });
+            }
+	    }
+	    catch (error) 
+		{
+    		throw error;
+	    }
     }
 
     /**
      * Abstract method for reading in a file from the file system and processing the results
      * @param filePath 
      */
-    protected readFileAsync(filePath: string): Promise<T>
+    protected readFileAsync(filePath: string, id: string): Promise<T>
     {
         throw new Error("FileSystemStore.readFileAsync : function not overloaded in abstract class");
     }
@@ -124,42 +164,40 @@ export default class FileSystemStore<T>
      * attempting to read in the file
      * @param filename The filename of the file to be attempted to be read by the factory initialisation
      */
-    protected storeReadFileAsync(filename: string): Promise<T>
+    protected async storeReadFileAsync(filename: string): Promise<T>
     {
-        return new Promise<T>( async (resolve, reject) =>
+        var obj = null;
+        this.logger ? this.logger.debug(Util.format("FileSystemStore.storeReadFileAsync : attempting to read file '%s'", filename)) : null;
+        try
         {
-            var obj = null;
-            var filePath = Path.join(this._filesDir, filename);      
-            this.logger ? this.logger.debug(Util.format("FileSystemStore.storeReadFileAsync : attempting to read file '%s'", filePath)) : null;
+            var fileStat = await this._directoryAccess.statAsync(filename);
+        }
+        catch(error)
+        {
+            // No such file exists so return a null
+            return obj;
+        }
+        if (fileStat.isFile())
+        {
             try
             {
-                var fileStat = await statAsync(filePath);
-                if (fileStat.isFile())
-                {
-                    try
-                    {
-                        obj = await this.readFileAsync(filePath);
-                    }
-                    catch (error)
-                    {
-                        // Issue with reading a file
-                        this.logger ? this.logger.error(Util.format("FileSystemStore.storeReadFileAsync : error thrown when processing store file '%s'", filename)) : null;
-                        return reject(error);
-                    }
-                }
-                else
-                {
-                    // Mathing entry in the directory is not a valid file
-                    this.logger ? this.logger.error(Util.format("FileSystemStore.storeReadFileAsync : error file of the correct type does not exist for store file '%s'", filename)) : null;
-                    return reject(this.constructDefaultReadError(filePath, "File of the correct type does not exist"));
-                }
-            } 
-            catch(error)
-            {
-                // No such file exists so return a null
+                var id = filename;
+                obj = await this.readFileAsync(filename, id);
             }
-            return resolve(obj);
-        });
+            catch (error)
+            {
+                // Issue with reading a file
+                this.logger ? this.logger.error(Util.format("FileSystemStore.storeReadFileAsync : error thrown when processing store file '%s'", filename)) : null;
+                throw error;
+            }
+        }
+        else
+        {
+            // Mathing entry in the directory is not a valid file
+            this.logger ? this.logger.error(Util.format("FileSystemStore.storeReadFileAsync : error file of the correct type does not exist for store file '%s'", filename)) : null;
+            throw this.constructDefaultReadError(filename, "File of the correct type does not exist");
+        }
+        return obj;
     }
 
     /**
@@ -168,7 +206,7 @@ export default class FileSystemStore<T>
      */
     protected getFromCache(filename: string): T
     {
-        if (!this.initalised)
+        if (!this.initialised)
             throw new Error("CertificateStore.getCertificate store has not been initialised");
         if (this._objectCache != null)
         {
@@ -179,23 +217,22 @@ export default class FileSystemStore<T>
     /**
      * Accessor for getting values from the filestore
      */
-    protected getFromFileSystem(filename: string): Promise<T>
+    protected async getFromFileSystem(filename: string): Promise<T>
     {
-        return new Promise<T>(async (resolve,reject) => 
+        if (this.initialised)
         {
-            if (this.initalised)
-            {    
-                try
-                {
-                    return resolve(await this.storeReadFileAsync(filename));
-                }
-                catch (error)
-                {
-                    this.logger ? this.logger.error(Util.format("FileSystemStore.getFromFile : error trying to resolve file '%s'", filename)) : null;
-                    return reject(error);
-                }
+            if (filename == null)
+                return null;
+            try
+            {
+                return await this.storeReadFileAsync(filename);
             }
-            return reject( Error("FileSystemStore.getFromFile store has not been initialised") );
-        });
+            catch (error)
+            {
+                this.logger ? this.logger.error(Util.format("FileSystemStore.getFromFile : error trying to resolve file '%s'", filename)) : null;
+                throw error;
+            }
+        }
+        throw new Error("FileSystemStore.getFromFile store has not been initialised");
     }
 }

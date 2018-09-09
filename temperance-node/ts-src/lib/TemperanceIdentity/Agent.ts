@@ -14,6 +14,7 @@ import AgentAccessControl from './AgentAccessControl';
 import * as FS from 'fs';
 import * as Util from 'util';
 import * as Path from 'path';
+import * as TLS from 'tls';
 
 const readFileAsync = Util.promisify(FS.readFile);
 
@@ -23,13 +24,17 @@ const readFileAsync = Util.promisify(FS.readFile);
 export default class Agent
 {
     // Agent identifier string
-    'agentId': string;
+    'id': string;
     // Filename of the certificate file.
     'certificateChain': CertificateChain;
     // The access stucture
     'accessControl': AgentAccessControl;
     // The identity object for this agent
     'identity': Identity;
+    // The identity string for this agent
+    'identityString': string;
+    // The agent string
+    'agentString': string
 
     /**
      * Validate the x509Cert and identity's distingishedName
@@ -37,90 +42,52 @@ export default class Agent
      * @param certificate the cert object in x509 library object form.
      * @param identityDistingishedName the DN of the identity to validate
      */
-    public static validateAgentCertificateChain(certificateChain: CertificateChain, agentId: string)
+    public static validateAgentCertificateChain(certificateChain: CertificateChain, agentString: string)
     {  
         if (certificateChain.length == 0)
             throw new Error("agent certificate chain cannot be empty");
-        var agentCertificate = certificateChain.entityCertificiate;
-        if (agentCertificate.isSelfSigned()) 
-            throw new Error("agent certificate cannot be self signed");
+        certificateChain.validateCertificateChain();
 
-        var certificateAgentString = Certificate.distingishedNameToIdentityString(agentCertificate.subject)
-        if (certificateAgentString !== agentId)
-            throw new Error(Util.format("agent certificate subject '%s' doesn't match the associated agentId '%s'",
-                certificateAgentString, agentId));
+        var certificateAgentString = certificateChain.entityCertificiate.subject.lookupString;
+        if (certificateAgentString !== agentString)
+            throw new Error(Util.format("agent certificate subject '%s' doesn't match the associated agentString '%s'",
+                certificateAgentString, agentString));
     }
 
     /**
      * Identity class to represent Identity and associated access.
      */
-    constructor(agentId: string, identity: Identity, certificateChain: CertificateChain, accessControl: AgentAccessControl) 
+    constructor(id: string, agentString: string, identityString: string, certificateChain: CertificateChain, accessControl: AgentAccessControl, identity: Identity) 
     {
-        this.agentId = agentId;
+        this.id = id;
+        this.agentString = agentString;
+        this.identityString = identityString;
         this.certificateChain = certificateChain;
         this.accessControl = accessControl;
         this.identity = identity;
     }
 
     /**
-     * Returns true if the raw certificate given matches the agent certificate
+     * Helper function to process a given TLS certificate and returns the instance of
+     * the constructed certificate object.
      * 
-     * @param certRaw the raw certificate buffer to check with agent
+     * @param tlsCertificate
      */
-    /*
-    public matchesCertificate(certificateRaw: Buffer): boolean
+    public static fromTLSCertificate(tlsCertificate: TLS.DetailedPeerCertificate) : Agent
     {
-        if (this.certificateRaw.equals(certificateRaw)) 
+        if (tlsCertificate == null)
+            return null;
+        // From the TLS chain generate CertificateChain
+        var certificateChain = CertificateChain.fromTLSCertificate(tlsCertificate);
+        var indexIdentityCertificate = certificateChain.findIndexIdentityCertificate();
+        var identityCertificate : Certificate = null;
+        var identityString = null;
+        if (indexIdentityCertificate >= 0)
         {
-	        return true;
+            identityCertificate = certificateChain.certificates[indexIdentityCertificate];
+            identityString = identityCertificate.subject.identityString;
+            certificateChain.slice(0, indexIdentityCertificate);
         }
-        return false;
+        return new Agent(null, certificateChain.entityCertificiate.subject.lookupString, identityString, certificateChain, null, null);
     }
-    */
-
-    /**
-     * Return true if the given namespace token exists in the identity.
-     *
-     * @param namespace Namespace to use to access tokens.
-     * @param token Token name to identify in the namespace.
-     */
-    /*
-    public getAccessToken(namespace: string, token) 
-    {
-        if (!(namespace in this.access))
-        {
-        	return false;
-        }
-        return this.access[namespace][token] === true;
-    }
-    */
-
-    /**
-     * Read each of the agent Json files from the given agentJsonPath. 
-     * Populate the identiy entity with instances of agent instance identified by objects current agent files.
-     * 
-     * @param agentJsonPath 
-     */
-    /*
-    public readPrivateKeyAsync(privateKeyDir: string, logger: any = null) : Promise<Map<string, Error>>
-    {
-        return new Promise( async (resolve, reject) => {
-            let issues = new Map<string, Error>();
-            logger ? logger.debug(Util.format("Agent.readPrivateKeyAsync() : reading in private-key '%s'", this.privateKey)) : null;
-            try
-            {
-                if (this.privateKey == null) 
-                    throw Error(Util.format("agent '%s' has no privateKey defined", this.agentString));
-                var privateKeyPath = Path.join(privateKeyDir, this.privateKey);
-                var privateKeyRaw = await readFileAsync(privateKeyPath);
-                this.privateKeyRaw = privateKeyRaw;
-            }
-            catch (error)
-            {
-                issues.set('privateKey', error);
-            }
-            return resolve(issues);
-        });
-    }
-    */
 }

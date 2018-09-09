@@ -3,133 +3,104 @@ import * as chaiAsPromised from 'chai-as-promised';
 import * as NodeForge from 'node-forge';
 
 import Certificate from '../../ts-src/lib/TemperanceIdentity/Certificate'
+import DistingishedName from '../../ts-src/lib/TemperanceIdentity/DistingishedName';
 import CertificateStore from '../../ts-src/lib/TemperanceIdentity/FileSystem/CertificateStore';
+import DirectoryAccess from '../../ts-src/lib/FileSystem/DirectoryAccess';
+
+import TestConfig from '../TestConfig';
 
 chai.should();
 chai.use(chaiAsPromised);
 
-const pemtools = require('pemtools');
-
-var certDir = "./ts-test/TemperanceIdentity/data/certificates/";
-var certStore = new CertificateStore(certDir);
+var certDirAccess = new DirectoryAccess("./ts-test/TemperanceIdentity/data/certificates/");
+var certStore = new CertificateStore(certDirAccess);
+certStore.logger = TestConfig.logger;
 
 describe('Class Certificate', function() {
     describe('get issuer', function() {
         it('success on valid certificate', function(done) {
-            var certificate = certStore.initaliseAsync()
-            .then( () => { return certStore.getCertificateAsync('cert.pem') })
+            var certificate = certStore.initialiseAsync()
+            .then( () => { return certStore.getCertificateAsync('agent-cert.pem') })
             .then( (certificate) => {
-                console.log(certificate);
-                var forgeCert : NodeForge.pki.Certificate = certificate.forge;
-                
-                //console.log(NodeForge.pki.certificateToAsn1(forgeCert));
-                console.log(forgeCert.issuer.attributes);
-                certificate.issuer['commonName'].should.be.equal('sha1:b469c21faab2d71c19cd3daa3df743e6c6777553');
+                certificate.issuer.attributes.get('CN').should.be.equal('sha1:b469c21faab2d71c19cd3daa3df743e6c6777553');
+                certificate.issuer.attributes.get('SN').should.be.equal('Carter');
+                certificate.issuer.attributes.get('GN').should.be.equal('Derek');
+                certificate.issuer.attributes.get('I').should.be.equal('DC');
+                certificate.issuer.attributes.get('C').should.be.equal('UK');
+                certificate.issuer.attributes.get('ST').should.be.equal('West-Midlands');
+                certificate.issuer.attributes.get('L').should.be.equal('Solihull');
+                certificate.issuer.attributes.get('O').should.be.equal('temperance');
+                certificate.issuer.attributes.get('OU').should.be.equal('identity');
                 done();
             })
-            .catch( (error) => { console.log("error"); done(error); return null });
-//            console.log(certificate);
-//            console.log(certificate.issuer['commonName']);
-//            done();
+            .catch( (error) => { console.log(error); done(error); });
+        });
+        it('success on valid lookupString', function(done) {
+            var certificate = certStore.initialiseAsync()
+            .then( () => { return certStore.getCertificateAsync('agent-cert.pem') })
+            .then( (certificate) => {
+                certificate.issuer.lookupString.should.be.equal('CN@sha1:b469c21faab2d71c19cd3daa3df743e6c6777553\\SN@Carter\\GN@Derek\\I@DC\\C@UK\\ST@West-Midlands\\L@Solihull\\O@temperance\\OU@identity');
+                done();
+            })
+            .catch( (error) => { console.log(error); done(error); });        
+        });
+        it('success on valid idenityString', function(done) {
+            var certificate = certStore.initialiseAsync()
+            .then( () => { return certStore.getCertificateAsync('agent-cert.pem') })
+            .then( (certificate) => {
+                certificate.issuer.identityString.should.be.equal('CN@sha1:b469c21faab2d71c19cd3daa3df743e6c6777553\\SN@Carter\\GN@Derek\\I@DC\\C@UK\\ST@West-Midlands\\L@Solihull\\O@temperance');
+                done();
+            })
+            .catch( (error) => { console.log(error); done(error); });        
         });
     });
-});
-    /*
     describe('get subject', function() {
-        it('success on valid certificate', function(done) {
-            var filePromise = Certificate.readCertFileAsync('./ts-test/TemperanceIdentity/data/cert.pem');
-            filePromise.then(function(certificate) {
-                (certificate.subject['commonName']).should.be.equal('sha1:b469c21faab2d71c19cd3daa3df743e6c6777553');
-                done();
-            });
-        });
-    });
-    describe('get publicKey', function() {
-        it('success on valid certificate', function(done) {
-            var filePromise = Certificate.readCertFileAsync('./ts-test/TemperanceIdentity/data/cert.pem');
-            filePromise.then(function(certificate) {
-                (certificate.publicKey['bitSize']).should.be.equal(2048);
-                done();
-            });
-        })
-    });
-    describe('distingishedNameToAgentString', function() {
-        it('success on valid distingished name', function(done) {
-            var filePromise = Certificate.readCertFileAsync('./ts-test/TemperanceIdentity/data/cert.pem');
-            filePromise.then(function(certificate) {
-                (Certificate.distingishedNameToAgentString(certificate.issuer)).should.be.equal("sha1:b469c21faab2d71c19cd3daa3df743e6c6777553/Derek/Carter/DC/Solihull/West-Midlands/UK/temperance/identity");
-                done();
-            });
-        });
-        it('throws on invalid distingished name', function(done) {
-            (function() { 
-                Certificate.distingishedNameToAgentString({
-                    'commonName': 'sha1:b469c21faab2d71c19cd3daa3df743e6c6777553',
-                    'givenName': 'Derek',
-                    'surname': 'Carter',
-                    'initials': 'DC',
-                    'localityName': 'Solihull',
-                    'stateOrProvinceName': 'West-Midlands',
-                    'countryName': 'UK',
-                    'organizationName': 'Temperance',
-                    //'organizationalUnitName': 'ok'
-                })
-            }).should.to.throw(Error);
-            done();
-        });
-    });
-    describe('distingishedNameToIdentityString', function() {
-        it('success on valid distingished name', function(done) {
-            var filePromise = Certificate.readCertFileAsync('./ts-test/TemperanceIdentity/data/cert.pem');
-            filePromise.then(function(certificate) {
-                (Certificate.distingishedNameToAgentString(certificate.issuer)).should.be.equal("sha1:b469c21faab2d71c19cd3daa3df743e6c6777553/Derek/Carter/DC/Solihull/West-Midlands/UK/temperance/identity");
-                done();
-            });
-        });
-        it('throws on invalid distingished name', function(done) {
-            (function() { 
-                Certificate.distingishedNameToAgentString({
-                    'commonName': 'sha1:b469c21faab2d71c19cd3daa3df743e6c6777553',
-                    'givenName': 'Derek',
-                    'surname': 'Carter',
-                    'initials': 'DC',
-                    'localityName': 'Solihull',
-                    'stateOrProvinceName': 'West-Midlands',
-                    'countryName': 'UK',
-                    //'organizationName': 'Temperance',
-                    'organizationalUnitName': 'ok'
-                })
-            }).should.to.throw(Error);
-            done();
-        });
-    });
-    describe('uniqueIdentityToHashObject', function() {
-        it('success on valid distingished name', function(done) {
-            var filePromise = Certificate.readCertFileAsync('./ts-test/TemperanceIdentity/data/cert.pem');
-            filePromise.then(function(certificate) {
-                (Certificate.uniqueIdentityToHashObject(certificate.issuer['commonName'])).should.have.property('hashType').equal("sha1");
-                (Certificate.uniqueIdentityToHashObject(certificate.issuer['commonName'])).should.have.property('hashValue').equal("b469c21faab2d71c19cd3daa3df743e6c6777553");
-                done();
-            });
-        });
-    });
-    describe('compareDistingishedNames', function() {
-        it('success on valid compare', function(done) {
-            var filePromise = Certificate.readCertFileAsync('./ts-test/TemperanceIdentity/data/cert.pem');
-            filePromise.then(function(certificate) {
-                (Certificate.compareDistingishedNames(certificate.issuer, certificate.subject)).should.be.true;
+        it('success on valid attributes', function(done) {
+            var certificate = certStore.initialiseAsync()
+            .then( () => { return certStore.getCertificateAsync('agent-cert.pem') })
+            .then( (certificate) => {
+                certificate.subject.attributes.get('CN').should.be.equal('sha1:b469c21faab2d71c19cd3daa3df743e6c6777553');
+                certificate.subject.attributes.get('SN').should.be.equal('Carter');
+                certificate.subject.attributes.get('GN').should.be.equal('Derek');
+                certificate.subject.attributes.get('I').should.be.equal('DC');
+                certificate.subject.attributes.get('C').should.be.equal('UK');
+                certificate.subject.attributes.get('ST').should.be.equal('West-Midlands');
+                certificate.subject.attributes.get('L').should.be.equal('Solihull');
+                certificate.subject.attributes.get('O').should.be.equal('temperance');
+                certificate.subject.attributes.get('OU').should.be.equal('server');
                 done();
             })
+            .catch( (error) => { console.log(error); done(error); });
+        });
+        it('success on valid lookupString', function(done) {
+            var certificate = certStore.initialiseAsync()
+            .then( () => { return certStore.getCertificateAsync('agent-cert.pem') })
+            .then( (certificate) => {
+                certificate.subject.lookupString.should.be.equal('CN@sha1:b469c21faab2d71c19cd3daa3df743e6c6777553\\SN@Carter\\GN@Derek\\I@DC\\C@UK\\ST@West-Midlands\\L@Solihull\\O@temperance\\OU@server');
+                done();
+            })
+            .catch( (error) => { console.log(error); done(error); });        
+        });
+        it('success on valid idenityString', function(done) {
+            var certificate = certStore.initialiseAsync()
+            .then( () => { return certStore.getCertificateAsync('agent-cert.pem') })
+            .then( (certificate) => {
+                certificate.subject.identityString.should.be.equal('CN@sha1:b469c21faab2d71c19cd3daa3df743e6c6777553\\SN@Carter\\GN@Derek\\I@DC\\C@UK\\ST@West-Midlands\\L@Solihull\\O@temperance');
+                done();
+            })
+            .catch( (error) => { console.log(error); done(error); });        
         });
     });
     describe('isSelfSigned', function() {
         it('true on self-signed cert', function(done) {
-            var filePromise = Certificate.readCertFileAsync('./ts-test/TemperanceIdentity/data/cert.pem');
-            filePromise.then(function(certificate) {
+            var certificate = certStore.initialiseAsync()
+            .then( () => { return certStore.getCertificateAsync('identity-cert.pem') })
+            .then( (certificate) => {
                 (certificate.isSelfSigned()).should.be.true;
                 done();
             })
+            .catch( (error) => { console.log(error); done(error); });
         });
     });
 });
-*/
+

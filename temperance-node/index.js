@@ -49,20 +49,26 @@ function setAccessIdentities(identities) {
 }
 
 function startServer(identities) {
-    var options = {
-	key: fs.readFileSync('../' + nconf.get('service-private-key-file')),
-	cert: fs.readFileSync('../' + nconf.get('service-cert-file')),
-	ca: temperanceIdentity.identitiesToPemArray(identities),
+	console.log("getting certs");
+	var options = {
+	//key: fs.readFileSync('../' + nconf.get('service-private-key-file')),
+	key: fs.readFileSync('../service/service-private-key.pem'),
+	//cert: fs.readFileSync('../' + nconf.get('service-cert-file')),
+	cert: fs.readFileSync('../service/service-cert.pem'),
+//	ca: temperanceIdentity.identitiesToPemArray(identities),
 	requestCert: true,
 	rejectUnauthorized: false
     };
 
+	console.log("getting express");
     const app = express();
 
-    app.use(x509Identity);
+	console.log("x509ident");
+	app.use(x509Identity);
+	console.log("body");
     app.use(bodyParser.json());
-    app.use('/org.temperance.test', orgTemperanceTest);
-    app.use('/org.temperance.details', orgTemperanceDetails);
+//    app.use('/org.temperance.test', orgTemperanceTest);
+//    app.use('/org.temperance.details', orgTemperanceDetails);
 /*    app.use('/', function (req, res) {
 	
 	console.log("----- req");
@@ -81,12 +87,15 @@ function startServer(identities) {
 }
 
 async function main() {
-    try {
-	var identities = await temperanceIdentity.readIdentityPath('../acquaintances/identities/');
-    } catch (err) {
-	console.log(err);
-    }
-    setAccessIdentities(identities);
+	console.log("main()");
+	var identities = null;
+   // try {
+	//var identities = await temperanceIdentity.readIdentityPath('../acquaintances/identities/');
+//    } catch (err) {
+//	console.log(err);
+//    }
+    //setAccessIdentities(identities);
     startServer(identities);
 }
+console.log("doing main");
 main();

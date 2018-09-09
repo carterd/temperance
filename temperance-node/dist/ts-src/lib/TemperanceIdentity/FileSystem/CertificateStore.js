@@ -14,16 +14,20 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 /// <reference types="node"/>
+// Temperance classes
 const Certificate_1 = require("../Certificate");
+// File System classes
 const FileSystemStore_1 = require("./FileSystemStore");
-const CertificateReadError_1 = require("./CertificateReadError");
+const IdLookup_1 = require("./IdLookup");
+// File System Error classes
+const CertificateReadError_1 = require("./Errors/CertificateReadError");
+// Node Libraries
 const FS = require("fs");
 const Util = require("util");
-const PemTools = require("pemtools");
-const X509 = require("x509");
 const readFileAsync = Util.promisify(FS.readFile);
-const readDirAsync = Util.promisify(FS.readdir);
-const statAsync = Util.promisify(FS.stat);
+/**
+ * A file system store returning certificates with a given id
+ */
 class CertificateStore extends FileSystemStore_1.default {
     /**
      * The constructory for the Filesystem CertificateFactory, requires a path where
@@ -32,32 +36,15 @@ class CertificateStore extends FileSystemStore_1.default {
      */
     constructor(certificateDir) {
         super(certificateDir, ".pem");
+        this._agentStringLookup = new IdLookup_1.default();
     }
     /**
-     * The wrapper to ensure the initialise of certificates is correct.
+     * Allows the base class to construct specific store read errors of a consistent type
+     * @param filePath
+     * @param message
      */
-    initalise() {
-        return new Promise((reslove, reject) => __awaiter(this, void 0, void 0, function* () {
-            this._certificateMap = new Map();
-            yield super.initalise();
-            this.initalised = true;
-        }));
-    }
-    /**
-     * The implementation of reading in the certificate files into the factory
-     * @param certificatePath The file path of the certificate to attempt to read in
-     * @param filename The filename only of the certificate file
-     */
-    processFileAsync(certificatePath, filename) {
-        return new Promise((resolve, reject) => __awaiter(this, void 0, void 0, function* () {
-            try {
-                var certificate = yield this.readCertFileAsync(certificatePath);
-                this._certificateMap.set(filename, certificate);
-            }
-            catch (err) {
-                this.readErrors.set(filename, new CertificateReadError_1.default(certificatePath, err));
-            }
-        }));
+    constructDefaultReadError(filePath, message) {
+        return new CertificateReadError_1.default(filePath, new Error(message));
     }
     /**
      * Helper function to process a given certificate file path and returns the instance of
@@ -66,31 +53,38 @@ class CertificateStore extends FileSystemStore_1.default {
      * @param certPath Path to the certificate file.
      * @return Promise of a Certificate object
      */
-    readCertFileAsync(certPath) {
-        return new Promise((resolve, reject) => __awaiter(this, void 0, void 0, function* () {
+    readFileAsync(certPath, id) {
+        return __awaiter(this, void 0, void 0, function* () {
+            var certificate = null;
             try {
-                var certificate = new Certificate_1.default();
-                certificate.raw = yield readFileAsync(certPath);
-                certificate.x509 = X509.parseCert(certificate.raw.toString());
-                certificate.pem = PemTools(certificate.raw.toString());
-                return resolve(certificate);
+                this.logger ? this.logger.debug(Util.format("CertificateStore.readFileAsync() : reading certificate file '%s'", certPath)) : null;
+                var pem = yield readFileAsync(certPath);
+                certificate = Certificate_1.default.fromPEM(id, pem);
+                // Ensure exists in lookup
+                this._agentStringLookup.addMapping(certificate.subject.lookupString, id);
+                return certificate;
             }
-            catch (err) {
-                return reject(err);
+            catch (error) {
+                this.logger ? this.logger.error(Util.format("CertificateStore.readFileAsync() : error in reading certificate '%s'", certPath)) : null;
+                throw new CertificateReadError_1.default(certPath, error);
             }
-        }));
+        });
     }
     /**
      * Return the certificate given the identity string.
      */
-    certificateFromIdString(id) {
-        return new Promise((resolve, reject) => {
-            if (!this.initalised)
-                throw new Error("CertificateStore.certificateFromIdString store has not been initialised");
-            if (!this._certificateMap.has(id))
-                throw new Error(Util.format("CertificateStore.certificateFromIdString key '%s' is not defined in store", id));
-            resolve(this._certificateMap.get(id));
-        });
+    getCertificateAsync(id) {
+        return this.getFromFileSystem(id);
+    }
+    /**
+     * Return the certificate from agent string.
+     * @param agentString
+     */
+    getCertificateFromAgentStringAsync(agentString) {
+        var id = this._agentStringLookup.getId(agentString);
+        if (id === undefined)
+            id = null;
+        return this.getCertificateAsync(id);
     }
 }
 exports.default = CertificateStore;

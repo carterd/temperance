@@ -30,7 +30,7 @@ export default class AgentListFactory
     /**
      * This is the agent store used to instanciate an agent from an Id
      */
-    private _agentStore: AgentStore;
+    'agentStore': AgentStore;
 
     /**
      * Constructor for the AgentListFactory object
@@ -38,42 +38,41 @@ export default class AgentListFactory
      */
     constructor(agentStore: AgentStore)
     {
-        this._agentStore = agentStore;
+        this.agentStore = agentStore;
     }
 
     /**
      * convert the given agent id strings into a agent list object
      * @param agentIds The list of ids used to resolve each agent in the returned AgentList
      */
-    public getAgentSetAsync(agentIds: Array<string>) : Promise<AgentList>
+    public async getAgentListAsync(agentIds: Array<string>) : Promise<AgentList>
     {
-        return new Promise(async (resolve, reject) => 
+        var agentSet = new AgentList();
+        var agentErrors = new Array<Error>();
+        for (var id of agentIds)
         {
-            var agentSet = new AgentList();
-            var agentErrors = new Array<Error>();
-            for (var id of agentIds)
+            try
             {
-                try
+                this.logger ? this.logger.debug(Util.format("AgentListFactory.getAgentSetAsync() : associating agent with id '%s'", id)) : null;
+                var agent = await this.agentStore.getAgentAsync(id);
+                if (agent == null)
                 {
-                    this.logger ? this.logger.debug(Util.format("AgentListFactory.getAgentSetAsync() : associating agent with id '%s'", id)) : null;
-                    var agent = await this._agentStore.getAgentAsync(id);
-                    if (agent == null)
-                    {
-                        agentErrors.push(new Error(Util.format("failed to find agent in agent store with id '%s'", id)));
-                    }
-                    else
-                    {
-                        agentSet.push(id, agent);
-                    }
+                    this.logger ? this.logger.error(Util.format("AgentListFactory.getAgentSetAsync() : error during association of agents, failed to find agent in agent store with id '%s'", id)) : null;
+                    agentErrors.push(new Error(Util.format("failed to find agent in agent store with id '%s'", id)));
                 }
-                catch (error)
+                else
                 {
-                    agentErrors.push(error);
+                    agentSet.push(id, agent);
                 }
             }
-            if (agentErrors.length != 0)
-                return reject(new AgentListError("errors during association of agents", agentErrors));
-            return resolve(agentSet);
-        });
+            catch (error)
+            {
+                this.logger ? this.logger.error(Util.format("AgentListFactor.getAgentSetAsycn() : error during association of agents '%s'", error)) : null;
+                agentErrors.push(error);
+            }
+        }
+        if (agentErrors.length != 0)
+            throw new AgentListError("errors during association of agents", agentErrors);
+        return agentSet;
     }
 }

@@ -3,9 +3,11 @@
     "acquaintances-identities-cert-dir": "acquaintances/identities/certs/",
     "acquaintances-agents-json-dir":     "acquaintances/agents",
     "acquaintances-agents-cert-dir":     "acquaintances/agents/certs/",
-    "self-identity-json-path":           "identity/identity.json",
+    "self-identity-json-dir":            "identity",
+    "self-identity-id":                  "identity.json",
     "self-identity-cert-dir":            "identity",
     "self-agent-keys-dir":               "service",
+    "self-agent-key-id":                 "service-private-key.pem",
     "self-agent-json-dir":               "identity/agents",
     "self-agent-cert-dir":               "service",
     "self-supported-services":                 [
@@ -13,5 +15,5 @@
     ],
     "service-modules-dir":               "temperance-node/dist/service-modules",
     "service-port":                      3000,
-    "self-agent-json":                   "test.service.json"
+    "self-agent-id":                    "test.service.json"
 }

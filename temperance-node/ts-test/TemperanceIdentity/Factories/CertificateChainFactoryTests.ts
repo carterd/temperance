@@ -12,21 +12,22 @@ import CertificateStore from '../../../ts-src/lib/TemperanceIdentity/FileSystem/
 import CertificateChainFactory from '../../../ts-src/lib/TemperanceIdentity/Factories/CertificateChainFactory';
 import CertificateChainError from '../../../ts-src/lib/TemperanceIdentity/Errors/CertificateListError';
 import CertificateChain from '../../../ts-src/lib/TemperanceIdentity/CertificateChain';
+import DirectoryAccess from '../../../ts-src/lib/FileSystem/DirectoryAccess';
 
-var certDir = "./ts-test/TemperanceIdentity/data/agents/certificates/";
+var certDirAccess = new DirectoryAccess("./ts-test/TemperanceIdentity/data/agents/certificates/");
 
-var certOne = new Certificate(), certTwo = new Certificate(), certThree = new Certificate();
-var validCertificateStore = new CertificateStore(certDir);
+var certOne = new Certificate('certOne',null), certTwo = new Certificate('certTwo',null), certThree = new Certificate('certThree',null);
+var validCertificateStore = new CertificateStore(certDirAccess);
 sinon.stub(validCertificateStore, "getCertificateAsync")
     .withArgs('one').resolves(certOne)
     .withArgs('two').resolves(certTwo)
     .withArgs('three').resolves(certThree);
-var missingCertificateStore = new CertificateStore(certDir);
+var missingCertificateStore = new CertificateStore(certDirAccess);
 sinon.stub(missingCertificateStore, "getCertificateAsync")
     .withArgs('one').resolves(certOne)
     .withArgs('two').resolves(certTwo)
     .withArgs('three').resolves(null);
-var missingCertificateStore = new CertificateStore(certDir);
+var missingCertificateStore = new CertificateStore(certDirAccess);
 sinon.stub(missingCertificateStore, "getCertificateAsync")
     .withArgs('one').resolves(certOne)
     .withArgs('two').resolves(certTwo)

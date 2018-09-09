@@ -9,12 +9,21 @@ import * as NConf from 'nconf';
 import * as BodyParser from 'body-parser';
 import * as Https from 'https';
 
+import AsyncHandler from './lib/Express/AsyncHandler'
 import Agent from './lib/TemperanceIdentity/Agent';
 import Identity from './lib/TemperanceIdentity/Identity';
 import IdentityHandler from './lib/Express/IdentityHandler';
 import Acquaintances from './lib/TemperanceIdentity/Acquaintances';
 import Config from './lib/Config';
 import ServiceHandler from './lib/Express/ServiceHandler';
+import IdentityStore from './lib/TemperanceIdentity/FileSystem/IdentityStore';
+import CertificateStore from './lib/TemperanceIdentity/FileSystem/CertificateStore';
+import PrivateKeyStore from './lib/TemperanceIdentity/FileSystem/PrivateKeyStore';
+import CertificateChainFactory from './lib/TemperanceIdentity/Factories/CertificateChainFactory';
+import CertificateListFactory from './lib/TemperanceIdentity/Factories/CertificateListFactory';
+import AgentStore from './lib/TemperanceIdentity/FileSystem/AgentStore';
+import AgentListFactory from './lib/TemperanceIdentity/Factories/AgentListFactory';
+import SelfIdentity from './lib/TemperanceIdentity/SelfIdentity';
 
 export default class App
 {
@@ -22,9 +31,7 @@ export default class App
 
     private _express;
 
-    private _selfIdentity: Identity;
-
-    private _selfAgent: Agent;
+    private _selfIdentity: SelfIdentity;
 
     private _acquaintances: Acquaintances;
 
@@ -59,21 +66,28 @@ export default class App
     /**
      * Using configuration read in the acquaintances for the agent
      */
-    private readAcquaintancesAsync() : Promise<Acquaintances>
+    private async readAcquaintancesAsync() : Promise<Acquaintances>
     {
-        return new Promise( async (resolve, reject) => 
-        {
-            var acquaintances = new Acquaintances(
-                this._config.acquaintancesIdentityJsonDir,
-                this._config.acquaintancesIdentityCertificateDir,
-                this._config.acquaintancesAgentJsonDir,
-                this._config.acquaintancesAgentCertificateDir);
+        this.logger ? this.logger.debug("readAcquaintancesAsync : initialising acquintances") : null;
+        var agentCertificateStore = new CertificateStore(this._config.acquaintancesAgentCertificateDir);
+        agentCertificateStore.logger = this.logger;
+        var certificateChainFactory = new CertificateChainFactory(agentCertificateStore);
+        var agentStore = new AgentStore(this._config.acquaintancesAgentJsonDir, certificateChainFactory);
+        agentStore.logger = this.logger;
+        var identityCertificateStore = new CertificateStore(this._config.acquaintancesIdentityCertificateDir);
+        var identityCerfificateListFatory = new CertificateListFactory(identityCertificateStore);
+        var agentListFactory = new AgentListFactory(agentStore);
 
-            acquaintances.logger = this.logger;
-            var errorList = await acquaintances.readAcquaintancesAsync();
-            this._acquaintances = acquaintances;
-            return resolve(acquaintances);
-        });
+        var identityStore = new IdentityStore(this._config.acquaintancesIdentityJsonDir, identityCerfificateListFatory, agentListFactory);
+        identityStore.logger = this.logger;
+
+        this._acquaintances = new Acquaintances(identityStore, identityCertificateStore, agentStore, agentCertificateStore);
+        this._acquaintances.logger = this.logger;
+
+        await this._acquaintances.initialiseAsync();
+        var errorList = this._acquaintances.identityErrors;
+
+        return this._acquaintances;
     }
 
     /**
@@ -81,25 +95,53 @@ export default class App
      */
     private readSelfIdentity() : Promise<Identity>
     {
-        return new Promise( async (resolve, reject) => {
-            var identity = null; //await Identity.readIdentityFileAsync(this._config.selfIdentityJsonPath, this._config.selfIdentityCertificateDir, this.logger);
-            var agentErrors = await identity.readAgentFilesAsync(this._config.selfAgentJsonDir, this._config.selfAgentCertificateDir, this.logger);
-            // Any issues with loading agents?
-            if (agentErrors.size > 0) 
+        return new Promise( async (resolve, reject) => 
+        {
+            this.logger ? this.logger.debug("readSelfIdentity : initialising self identity") : null;
+
+            // Agents
+            var selfAgentCertificateStore = new CertificateStore(this._config.selfAgentCertificateDir);
+            selfAgentCertificateStore.logger = this.logger;
+            var selfAgentCertificateChainFactory = new CertificateChainFactory(selfAgentCertificateStore);
+            selfAgentCertificateChainFactory.logger = this.logger;
+            var selfAgentStore = new AgentStore(this._config.selfAgentJsonDir, selfAgentCertificateChainFactory);
+            selfAgentStore.logger = this.logger;
+            var selfAgentListFactory = new AgentListFactory(selfAgentStore);
+            selfAgentListFactory.logger = this.logger;
+
+            // Identity
+            var selfIdentityCertificateStore = new CertificateStore(this._config.selfIdentityCertificateDir);
+            selfIdentityCertificateStore.logger =this.logger;
+            var selfIdentityCerfificateListFatory = new CertificateListFactory(selfIdentityCertificateStore);
+            selfIdentityCerfificateListFatory.logger = this.logger;
+            var selfIdentityStore = new IdentityStore(this._config.selfIdentityJsonDir, selfIdentityCerfificateListFatory, selfAgentListFactory);
+            selfIdentityStore.logger = this.logger;
+            var selfPrivateKeyStore = new PrivateKeyStore(this._config.selfAgentKeysDir);
+
+
+            try
             {
-                agentErrors.forEach(
-                    (value, key) => { 
-                        this.logger ? this.logger.error(Util.format("App.readSelfIdentity() : error reading agent json file '%s' identified in identity json file '%s'",key ,this._config.selfIdentityJsonPath)) : null;
-                        this.logger ? this.logger.debug(Util.format("App.readSelfIdentity() : the following error was reported reading agent file '%s' '%s'", key, value)) : null; 
-                    });
+                this._selfIdentity = new SelfIdentity(selfIdentityStore, selfPrivateKeyStore, this._config.selfIdentityId, this._config.selfAgentId, this._config.selfAgentKeyId);
+                this._selfIdentity.logger = this.logger;
+                await this._selfIdentity.initialiseAsync();
+                var identity = this._selfIdentity.identity;
             }
-            if (!identity.agentMap.has(this._config.selfAgentJson))
+            catch (error)
             {
-                this.logger ? this.logger.error(Util.format("App.readSelfIdentity() : error agent json file for use as the serivce agent '%s' not specified in identity '%s'", this._config.selfAgentJson, this._config.selfIdentityJsonPath)) : null;
-                return reject(new Error('self agent json file for use as service agent not specified'));
+                console.log("HELP ME2)");
+                // Any issues with loading agents?
+                if (this._selfIdentity.identityErrors.size > 0) 
+                {
+                    this._selfIdentity.identityErrors.forEach(
+                        (value, key) => { 
+                            this.logger ? this.logger.error(Util.format("App.readSelfIdentity() : error reading agent json file '%s' identified in identity json file '%s'",key ,this._config.selfIdentityJsonDir)) : null;
+                            this.logger ? this.logger.debug(Util.format("App.readSelfIdentity() : the following error was reported reading agent file '%s' '%s'", key, value)) : null; 
+                        });
+                }
+                return reject(error);
             }
-            var agent = identity.agentMap.get(this._config.selfAgentJson);
-            var privateKeyErrors = await agent.readPrivateKeyAsync(this._config.selfAgentKeysDir, this.logger);
+            var agent = this._selfIdentity.agent;
+/*            var privateKeyErrors = await agent.readPrivateKeyAsync(this._config.selfAgentKeysDir, this.logger);
             if (privateKeyErrors.size > 0)
             {
                 privateKeyErrors.forEach(
@@ -110,8 +152,7 @@ export default class App
                 )
                 return reject(new Error('self agent failed to read private-key'));
             }
-            this._selfIdentity = identity;
-            this._selfAgent = agent;
+            */
             return resolve(identity);
         });
     }
@@ -121,8 +162,20 @@ export default class App
      */
     private mountRoutes (): void 
     {
-        this.readAcquaintancesAsync().then(
+        this.readAcquaintancesAsync()
+        .then( 
             (acquaintances) => {
+                console.log("ERRORS");
+                for (var id of acquaintances.identityErrors.keys())
+                {
+                    console.log(id);
+                    var error = acquaintances.identityErrors.get(id);
+                    console.log(error.message);
+                    console.log(error.name);
+                    console.log(error.stack);
+                    console.log( JSON.stringify( error , null, 4) );
+
+                }
                 this.readSelfIdentity().then(
                     (identity) => {
                         this._identityHandler = new IdentityHandler(acquaintances, identity);
@@ -130,9 +183,24 @@ export default class App
 
                         this.startService();
                     }
-                )
+                    ,
+                    (error) => {
+                        this.logger.error("Failed to readSelfIdentity");
+                        throw (error);
+                    }
+                ).catch( (error) => {
+                    console.log("EVEN MORE ERROR");
+                    console.log(error);
+                } ); 
             }
-        );
+            ,
+            (error) => {
+                console.log("ERROR HERE");
+                this.logger.error("Failed to readAcquaintances");
+            }
+        ).catch((error) => { 
+            console.log("EVEN EVEN MORE ERROR");
+        });
     }
 
     /**
@@ -141,21 +209,20 @@ export default class App
     private startService()
     {
         this._express = express();
-        this._express.use(this._identityHandler.handler());
+        this._express.use(AsyncHandler(this._identityHandler.handler()));
         this._express.use(BodyParser.json());
         this._express.use(this._serviceHandler.handler());
 
-        var agent = this._selfAgent;;
-        var privateKey =  null// agent.privateKeyRaw;
-        var certificate =  null // agent.certificateRaw;
+        var privateKey = this._selfIdentity.privateKey.raw;
+        var certificate = this._selfIdentity.agent.certificateChain.entityCertificiate.pem;
 
         var port = this._config.selfServicePort;
         var options = {
-            key: privateKey,//Fs.readFileSync('./service/service-private-key.pem'),
-            cert: certificate,//Fs.readFileSync('./service/service-cert.pem'),
-            //ca: temperanceIdentity.identitiesToPemArray(identities),
-            requestCert: true,
-            rejectUnauthorized: false
+	        requestCert: true,
+	        rejectUnauthorized: false,
+            key: privateKey,
+            cert: certificate,
+//            ca: [ this._selfIdentity.identity.identityCertificates ]
         };
         this._httpsServer = Https.createServer(options, this._express);
         this._httpsServer.listen(port, (err) => 
